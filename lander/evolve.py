@@ -2,8 +2,6 @@
 # LunarLander-v2 environment (https://gym.openai.com/envs/LunarLander-v2).
 # Sample run here: https://gym.openai.com/evaluations/eval_FbKq5MxAS9GlvB7W6ioJkg
 
-from __future__ import print_function
-
 import gym.wrappers
 
 import matplotlib.pyplot as plt
@@ -22,11 +20,11 @@ NUM_CORES = 8
 
 env = gym.make('LunarLander-v2')
 
-print("action space: {0!r}".format(env.action_space))
-print("observation space: {0!r}".format(env.observation_space))
+print(f"action space: {env.action_space!r}")
+print(f"observation space: {env.observation_space!r}")
 
-env = gym.wrappers.Monitor(env, 'results', force=True)
-
+# Uncomment to render
+# env = gym.wrappers.Monitor(env, 'results', force=True)
 
 class LanderGenome(neat.DefaultGenome):
     def __init__(self, key):
@@ -52,8 +50,7 @@ class LanderGenome(neat.DefaultGenome):
         return dist + disc_diff
 
     def __str__(self):
-        return "Reward discount: {0}\n{1}".format(self.discount,
-                                                  super().__str__())
+        return f"Reward discount: {self.discount}\n{super().__str__()}"
 
 
 def compute_fitness(genome, net, episodes, min_reward, max_reward):
@@ -116,7 +113,7 @@ class PooledErrorCompute(object):
 
             self.test_episodes.append((score, data))
 
-        print("Score range [{:.3f}, {:.3f}]".format(min(scores), max(scores)))
+        print(f"Score range [{min(scores):.3f}, {max(scores):.3f}]")
 
     def evaluate_genomes(self, genomes, config):
         self.generation += 1
@@ -126,19 +123,19 @@ class PooledErrorCompute(object):
         for gid, g in genomes:
             nets.append((g, neat.nn.FeedForwardNetwork.create(g, config)))
 
-        print("network creation time {0}".format(time.time() - t0))
+        print(f"network creation time {time.time() - t0}")
         t0 = time.time()
 
         # Periodically generate a new set of episodes for comparison.
         if 1 == self.generation % 10:
             self.test_episodes = self.test_episodes[-300:]
             self.simulate(nets)
-            print("simulation run time {0}".format(time.time() - t0))
+            print(f"simulation run time {time.time() - t0}")
             t0 = time.time()
 
         # Assign a composite fitness to each genome; genomes can make progress either
         # by improving their total reward or by making more accurate reward estimates.
-        print("Evaluating {0} test episodes".format(len(self.test_episodes)))
+        print(f"Evaluating {len(self.test_episodes)} test episodes")
         if self.pool is None:
             for genome, net in nets:
                 reward_error = compute_fitness(genome, net, self.test_episodes, self.min_reward, self.max_reward)
@@ -153,7 +150,7 @@ class PooledErrorCompute(object):
                 reward_error = job.get(timeout=None)
                 genome.fitness = -np.sum(reward_error) / len(self.test_episodes)
 
-        print("final fitness compute time {0}\n".format(time.time() - t0))
+        print(f"final fitness compute time {time.time() - t0}\n")
 
 
 def run():
@@ -179,8 +176,6 @@ def run():
         try:
             gen_best = pop.run(ec.evaluate_genomes, 5)
 
-            #print(gen_best)
-
             visualize.plot_stats(stats, ylog=False, view=False, filename="fitness.svg")
 
             plt.plot(ec.episode_score, 'g-', label='score')
@@ -191,10 +186,10 @@ def run():
             plt.close()
 
             mfs = sum(stats.get_fitness_mean()[-5:]) / 5.0
-            print("Average mean fitness over last 5 generations: {0}".format(mfs))
+            print(f"Average mean fitness over last 5 generations: {mfs}")
 
             mfs = sum(stats.get_fitness_stat(min)[-5:]) / 5.0
-            print("Average min fitness over last 5 generations: {0}".format(mfs))
+            print(f"Average min fitness over last 5 generations: {mfs}")
 
             # Use the best genomes seen so far as an ensemble-ish control system.
             best_genomes = stats.best_unique_genomes(3)
@@ -220,7 +215,7 @@ def run():
                     best_action = np.argmax(votes)
                     observation, reward, done, info = env.step(best_action)
                     score += reward
-                    env.render()
+                    # env.render()
                     if done:
                         break
 
@@ -239,14 +234,13 @@ def run():
 
                 # Save the winners.
                 for n, g in enumerate(best_genomes):
-                    name = 'winner-{0}'.format(n)
-                    with open(name+'.pickle', 'wb') as f:
+                    name = f'winner-{n}'
+                    with open(f'{name}.pickle', 'wb') as f:
                         pickle.dump(g, f)
 
-                    visualize.draw_net(config, g, view=False, filename=name+"-net.gv")
-                    visualize.draw_net(config, g, view=False, filename=name+"-net-enabled.gv",
-                                       show_disabled=False)
-                    visualize.draw_net(config, g, view=False, filename=name+"-net-enabled-pruned.gv",
+                    visualize.draw_net(config, g, view=False, filename=f"{name}-net.gv")
+                    visualize.draw_net(config, g, view=False, filename=f"{name}-net-enabled.gv", show_disabled=False)
+                    visualize.draw_net(config, g, view=False, filename=f"{name}-net-enabled-pruned.gv",
                                        show_disabled=False, prune_unused=True)
 
                 break
