@@ -11,15 +11,19 @@ from stable_baselines3.ppo import PPO
 from stable_baselines3.ppo import CnnPolicy
 from stable_baselines3.common.callbacks import CheckpointCallback
 
+from subprocess import Popen
+from webbrowser import open_new_tab
+
 PYTORCH_SEED = 42  # Seed for pytorch
 VERBOSE = 2  # 0 no output, 1 info, 2 debug
 CHECKPOINT_FREQ = 1_000_000  # interval between checkpoints
 BASE_CHECKPOINT_PATH = "checkpoints/"  # path to save checkpoints to
-BASE_LOG_PATH = "logs/"
+BASE_LOG_PATH = "logs/"  # path to save tensorboard logs to
 ENV_NAME = "Breakout-v0"  # name of gym environment
 NUM_STEPS = 10_000_000  # total training steps to take
 BATCH_SIZE = 2048  # size of batch updates
 NUM_ENVS = 16  # number of parallel environments
+TENSORBOARD_PORT = 6006  # port tensorboard should run on
 
 MODELS: [Benchmark] = [NatureBaseline, NatureSmall, NatureLarge]
 
@@ -27,6 +31,9 @@ MODELS: [Benchmark] = [NatureBaseline, NatureSmall, NatureLarge]
 def main():
     device = get_device("cuda")
     print(f"Loading model onto {device}")
+
+    tensorboard = Popen(f"tensorboard --logdir={BASE_LOG_PATH} --port={TENSORBOARD_PORT}")
+    open_new_tab(f"http://localhost:{TENSORBOARD_PORT}")
 
     for benchmark_class in MODELS:
         print(f"Training {benchmark_class.name()}")
@@ -70,6 +77,8 @@ def main():
         model.save(os.path.join(checkpoint_path, "final.zip"))
 
         del model
+
+    tensorboard.kill()
 
 
 if __name__ == "__main__":
