@@ -4,6 +4,8 @@
 **/ffplay.exe
 **/ffprobe.exe
 sandbox.ipynb
+checkpoints/**/*
+logs/**/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
