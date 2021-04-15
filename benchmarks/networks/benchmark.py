@@ -10,7 +10,6 @@ from torch import nn
 
 
 class Benchmark(BaseFeaturesExtractor, ABC):
-    @classmethod
     @abstractmethod
     def name(self):
         """
