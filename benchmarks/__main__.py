@@ -107,7 +107,7 @@ def train(idx: int, round: int, queue: Queue, results: dict):
         # reward_mean, reward_std = evaluate_policy(model, env)
         reward_mean, reward_std = random.random() * MAX_FITNESS[0], random.random() * (MAX_FITNESS[0] / 10)
 
-        results[ind_2_str(individual)] = {"mean": reward_mean, "std": reward_std, "round": round}
+        results[ind_2_str(individual)] = {"name": name, "mean": reward_mean, "std": reward_std, "round": round}
     return 0.0
 
 
@@ -158,8 +158,8 @@ def main():
     # set new seed and record initial rng state for reproducibility
     # TODO: random.seed(RNG_SEED)
     # TODO: torch.manual_seed(RNG_SEED)
-    torch_state = torch.get_rng_state()
-    random_state = random.getstate()
+    # torch_state = torch.get_rng_state()
+    # random_state = random.getstate()
 
     with Manager() as manager:
         queue = manager.Queue()
@@ -170,14 +170,7 @@ def main():
         creator.create("Individual", list, fitness=creator.FitnessMax)
 
         toolbox = base.Toolbox()
-        stats = tools.Statistics(lambda ind: ind.fitness.values)
-        stats.register("avg", np.mean)
-        stats.register("std", np.std)
-        stats.register("min", np.min)
-        stats.register("max", np.max)
-
         toolbox.register("layer_output", random_power_of_2, LAYER_MIN_POWER, LAYER_MAX_POWER)
-
         toolbox.register("individual", tools.initCycle, creator.Individual, (toolbox.layer_output,), n=N_CYCLES)
         toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 
@@ -223,8 +216,8 @@ def main():
 
             rnd += 1
 
-            torch.set_rng_state(torch.ByteTensor(torch_state))
-            random.setstate(random_state)
+            # torch.set_rng_state(torch.ByteTensor(torch_state))
+            # random.setstate(random_state)
 
             done = True
 
