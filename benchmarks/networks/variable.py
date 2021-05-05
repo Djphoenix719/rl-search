@@ -17,7 +17,7 @@ class LayerConfig:
 
 def benchmark_name(layers: List[LayerConfig]) -> str:
     names = map(lambda layer: f"{layer.output_channels}-{layer.kernel_size}-{layer.stride}-{layer.padding}-{layer.activation}", layers)
-    return "Variable_Benchmark_" + "_".join(names)
+    return "_".join(names)
 
 
 class VariableBenchmark(Benchmark):
@@ -31,6 +31,7 @@ class VariableBenchmark(Benchmark):
     def setup_model(self) -> nn.Sequential:
         layers = []
 
+        # init last_config so we can simplify our for loop to make use of it
         last_config = LayerConfig(self.input_channels, 0, 0, 0, "")
         for config in self.layer_configs:
 
