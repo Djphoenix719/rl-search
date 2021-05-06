@@ -32,8 +32,8 @@ from benchmarks.networks import benchmark_name
 
 RNG_SEED = 42  # Seed for pytorch
 VERBOSE = 2  # 0 no output, 1 info, 2 debug
-BASE_CHECKPOINT_PATH = "checkpoints/"  # path to save checkpoints to
-BASE_LOG_PATH = "logs/"  # path to save tensorboard logs to
+BASE_CHECKPOINT_PATH = "/mnt/disks/checkpoints/checkpoints/"  # path to save checkpoints to
+BASE_LOG_PATH = "/mnt/disks/checkpoints/logs/"  # path to save tensorboard logs to
 ENV_NAME = "Pong-v0"  # name of gym environment
 TRAIN_STEPS = 1_000  # total training steps to take
 EVAL_STEPS = 1_000  # steps to evaluate a trained model
