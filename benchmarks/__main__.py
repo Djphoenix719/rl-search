@@ -33,7 +33,7 @@ TRAIN_STEPS = 1_000_000  # total training steps to take
 EVAL_STEPS = 10_000  # steps to evaluate a trained model
 CHECKPOINT_FREQ = 500_000  # interval between checkpoints
 BATCH_SIZE = 64  # size of batch updates
-N_ENVS = os.cpu_count()  # number of parallel environments to evaluate
+N_ENVS = 4  # number of parallel environments to evaluate
 DEVICE_TYPE = "cuda" if torch.cuda.is_available() else "cpu"  # run on cpu or cuda
 TENSORBOARD_PORT = 6006  # port tensorboard should run on
 LAYER_MIN_POWER, LAYER_MAX_POWER = 1, 12  # max size of output dimensions on a layer in power of 2
@@ -235,6 +235,7 @@ def main():
         print("Best of run")
         print(hof.items)
 
+        # TOOD: Stopping criteria
         done = True
 
     # tensorboard.kill()
