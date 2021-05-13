@@ -4,7 +4,6 @@ import random
 import statistics
 
 from functools import lru_cache
-from subprocess import Popen
 
 from deap.base import Fitness
 from stable_baselines3 import PPO
@@ -15,8 +14,6 @@ from stable_baselines3.ppo import CnnPolicy
 from typing import List
 from typing import Tuple
 
-from google.cloud import storage
-
 import torch
 from deap import base
 from deap import tools
@@ -26,18 +23,14 @@ from benchmarks.networks import LayerConfig
 from benchmarks.networks import VariableBenchmark
 from benchmarks.networks import benchmark_name
 
-# os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = "./service-account.json"
-# STORAGE_CLIENT = storage.Client(project="masters-thesis-312816")
-# STORAGE_BUCKET = storage.Bucket(STORAGE_CLIENT, name="rl-search-masters-thesis")
-
 RNG_SEED = 42  # Seed for pytorch
 VERBOSE = 2  # 0 no output, 1 info, 2 debug
 ROOT_PATH = "/mnt/disks/checkpoints/"
 BASE_CHECKPOINT_PATH = os.path.join(ROOT_PATH, "checkpoints")  # path to save checkpoints to
 BASE_LOG_PATH = os.path.join(ROOT_PATH, "logs")  # path to save tensorboard logs to
 ENV_NAME = "Pong-v0"  # name of gym environment
-TRAIN_STEPS = 1_000  # total training steps to take
-EVAL_STEPS = 1_000  # steps to evaluate a trained model
+TRAIN_STEPS = 1_000_000  # total training steps to take
+EVAL_STEPS = 10_000  # steps to evaluate a trained model
 CHECKPOINT_FREQ = 500_000  # interval between checkpoints
 BATCH_SIZE = 1024  # size of batch updates
 N_ENVS = os.cpu_count()  # number of parallel environments to evaluate
@@ -205,7 +198,7 @@ def main():
     os.makedirs(BASE_CHECKPOINT_PATH, exist_ok=True)
     os.makedirs(BASE_LOG_PATH, exist_ok=True)
 
-    # tensorboard = Popen(f"tensorboard --logdir={BASE_LOG_PATH} --port={TENSORBOARD_PORT}")
+    # tensorboard = Popen(f"/home/cuccinela5/anaconda3/envs/thesis1/bin/tensorboard --logdir={BASE_LOG_PATH} --port={TENSORBOARD_PORT}")
     # open_new_tab(f"http://localhost:{TENSORBOARD_PORT}")
 
     # set new seed and record initial rng state for reproducibility
