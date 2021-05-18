@@ -67,4 +67,9 @@ class Benchmark(BaseFeaturesExtractor, ABC):
         self.linear = self.setup_linear(num_output)
 
     def forward(self, observations: torch.Tensor) -> torch.Tensor:
+        """
+        Single forward pass of the model
+        :param observations:
+        :return:
+        """
         return self.linear(self.cnn(observations))

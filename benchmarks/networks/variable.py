@@ -16,11 +16,21 @@ class LayerConfig:
 
 
 def benchmark_name(layers: List[LayerConfig]) -> str:
+    """
+    Construct a deterministic name of the benchmark
+    :param layers:
+    :return:
+    """
     names = map(lambda layer: f"{layer.output_channels}-{layer.kernel_size}-{layer.stride}-{layer.padding}-{layer.activation}", layers)
     return "_".join(names)
 
 
 class VariableBenchmark(Benchmark):
+    """
+    Variable benchmark, where a set of hyper-parameters can be configured to vary a feature extractor at runtime
+    Most of the internals are handled by the package Stable Baselines
+    """
+
     def name(self):
         return benchmark_name(self.layer_configs)
 

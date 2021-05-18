@@ -47,11 +47,21 @@ INDIVIDUAL_CLASS = tuple  # class individual uses in deap framework
 
 
 class Fitness(base.Fitness):
+    """
+    Represents the fitness of our individual. Mostly this is used as a way of
+    declaring the initial values within the paradigm permitted by the DEAP framework.
+    """
+
     def __init__(self):
         self.weights = MAX_FITNESS
 
 
 class Individual:
+    """
+    Represents an individual set of hyper-parameters to be turned into a model.
+    This class mimics a list but is hashable to allow multithreading later.
+    """
+
     _params: List[int]
     fitness: Fitness
 
@@ -87,11 +97,25 @@ def random_power_of_2(lower: int, upper: int) -> int:
 
 
 def construct_layers(individual: Individual) -> List[LayerConfig]:
+    """
+    Construct a list of layer configs to pass to the feature extractor
+    :param individual: The individual to construct the configs for
+    :return:
+    """
+    # TODO: Determine kernel size
     return [LayerConfig(n_out, 2, 1, 0, "gelu") for n_out in individual]
 
 
 @lru_cache(maxsize=None)
 def evaluate(individual: Individual) -> Tuple[int]:
+    """
+    Evaluate a single individual model and return it's mean score after the training time is elapsed.
+    Models are trained and evaluated for a number of timesteps as paramterized in the constants at the
+    top of the file.
+    :param individual: The individual to evaluate.
+    :return:
+    """
+
     layers = construct_layers(individual)
     name = benchmark_name(layers)
 
@@ -105,15 +129,18 @@ def evaluate(individual: Individual) -> Tuple[int]:
     log_path = os.path.join(BASE_LOG_PATH, "PPO", ENV_NAME, name)
     os.makedirs(log_path, exist_ok=True)
 
+    # Creates a gym environment for an atari game using the specified seed and number of environments
+    # This is a "vectorized environment", which means Stable Baselines batches the updates into vectors
+    # for improved performance..
     env = make_atari_env(
         ENV_NAME,
         n_envs=N_ENVS,
         seed=RNG_SEED,
         wrapper_kwargs=dict(
-            noop_max=30,
-            frame_skip=1,
+            noop_max=30,  # max sequential no-ops to take
+            frame_skip=1,  # number of frames to skip before taking a new action
             screen_size=84,
-            terminal_on_life_loss=True,
+            terminal_on_life_loss=True,  #
             clip_reward=True,
         ),
     )
@@ -133,6 +160,7 @@ def evaluate(individual: Individual) -> Tuple[int]:
     config_path = f"{checkpoint_path}\\cnn_config"
     zip_path = f"{checkpoint_path}\\model.zip"
 
+    # output the model config to a file for easier viewing
     with open(config_path, "w") as file:
         file.write(f"{name}\n")
         file.write(str(model.policy.features_extractor.cnn))
@@ -140,13 +168,6 @@ def evaluate(individual: Individual) -> Tuple[int]:
 
     model.learn(TRAIN_STEPS, callback=callback, tb_log_name=name)
     model.save(zip_path)
-
-    # print("Uploading model")
-    # blob_config = STORAGE_BUCKET.blob(config_path)
-    # blob_config.upload_from_filename(config_path, content_type="text/plain")
-    # zip_config = STORAGE_BUCKET.blob(zip_path)
-    # zip_config.upload_from_filename(zip_path, content_type="application/zip")
-    # print("Upload complete")
 
     print("Evaluating final model")
 
@@ -214,12 +235,23 @@ def main():
     hof = tools.HallOfFame(maxsize=N_BEST)
 
     toolbox = base.Toolbox()
+    # register a new helper function. pass it the min and max power weights every call
     toolbox.register("layer_output", random_power_of_2, LAYER_MIN_POWER, LAYER_MAX_POWER)
+    # this registration is used to create an individual. We generate 3 weights using the layer_output registration above
     toolbox.register("individual", tools.initCycle, Individual, (toolbox.layer_output,), n=N_CYCLES)
+    # register the population function, which we'll use to create a population of individuals
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
+
+    # register the selection function the algorithm will use
+    # in our case we use tournament selection, which operates as follows
+    # > Select the best individual among *tournsize* randomly chosen individuals, *k* times.
+    # Note we choose K below with the mu property
     toolbox.register("select", tools.selTournament, tournsize=3)
+    # the evaluation function will run the model on the gpu in our case
     toolbox.register("evaluate", evaluate)
+    # register our desired mating function, in our case inplace uniform crossover
     toolbox.register("mate", tools.cxUniform, indpb=0.5)
+    # register our desired mutation function, in our case we move a weight up or down a power of two randomly
     toolbox.register("mutate", mutate)
 
     print(f"Running with {torch.cuda.device_count()} GPUs")
@@ -228,14 +260,24 @@ def main():
 
     done = False
     while not done:
-        mu = POPULATION_SIZE // 10
-        lambda_ = POPULATION_SIZE - mu
-        algorithms.eaMuPlusLambda(population, toolbox, mu=mu, lambda_=lambda_, cxpb=0.5, mutpb=0.05, ngen=N_GEN, stats=sts, halloffame=hof, verbose=VERBOSE > 0)
+        mu = POPULATION_SIZE // 10  # select the top 10% of individuals with tournament selection
+        lambda_ = POPULATION_SIZE - mu  #
+
+        # We'll use a Mu + Lambda evolutionary algorithm that runs based on the below psuedocode
+        # > evaluate(population)
+        # > for g in range(ngen):
+        # >     offspring = varOr(population, toolbox, lambda_, cxpb, mutpb)
+        # >     evaluate(offspring)
+        # >     population = select(population + offspring, mu)
+        # See: https://deap.readthedocs.io/en/master/api/algo.html#deap.algorithms.eaMuPlusLambda
+        logbook = algorithms.eaMuPlusLambda(
+            population, toolbox, mu=mu, lambda_=lambda_, cxpb=0.5, mutpb=0.05, ngen=N_GEN, stats=sts, halloffame=hof, verbose=VERBOSE > 0
+        )
 
         print("Best of run")
         print(hof.items)
 
-        # TOOD: Stopping criteria
+        # TODO: Stopping criteria, do we want to continue after N_GENS for any reason?
         done = True
 
     # tensorboard.kill()
