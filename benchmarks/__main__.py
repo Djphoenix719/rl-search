@@ -15,17 +15,20 @@ from typing import List
 from typing import Tuple
 
 import torch
+from time import time
+from faker import Faker
+
 from deap import base
 from deap import tools
 from deap import algorithms
 
+from benchmarks.activation import ActivationFunction
 from benchmarks.networks import LayerConfig
 from benchmarks.networks import VariableBenchmark
-from benchmarks.networks import benchmark_name
 
 RNG_SEED = 42  # Seed for pytorch
 VERBOSE = 2  # 0 no output, 1 info, 2 debug
-ROOT_PATH = "./"
+ROOT_PATH = "./"  # root save path
 BASE_CHECKPOINT_PATH = os.path.join(ROOT_PATH, "checkpoints")  # path to save checkpoints to
 BASE_LOG_PATH = os.path.join(ROOT_PATH, "logs")  # path to save tensorboard logs to
 ENV_NAME = "Pong-v0"  # name of gym environment
@@ -36,14 +39,14 @@ BATCH_SIZE = 64  # size of batch updates
 N_ENVS = 4  # number of parallel environments to evaluate
 DEVICE_TYPE = "cuda" if torch.cuda.is_available() else "cpu"  # run on cpu or cuda
 TENSORBOARD_PORT = 6006  # port tensorboard should run on
-LAYER_MIN_POWER, LAYER_MAX_POWER = 1, 12  # max size of output dimensions on a layer in power of 2
+LAYER_MIN_POWER, LAYER_MAX_POWER = 1, 9  # max size of output dimensions on a layer in power of 2
 N_CYCLES = 3  # number of weights to generate, functionally becomes number of layers in cnn
 POPULATION_SIZE = 5  # before each round, ensure this many individuals exist, less may due to selection
 N_BEST = 4  # keep the top n individuals from a round
 MAX_FITNESS = (20.0,)  # max fitness a model can achieve, dependent on task
-INIT_FITNESS = (0.0,)  # initial fitness values
+INIT_FITNESS = (-20.0,)  # initial fitness values
 N_GEN = 25  # number of generations
-INDIVIDUAL_CLASS = tuple  # class individual uses in deap framework
+SLUG_WORDS = 8  # number of words in our slugs
 
 
 class Fitness(base.Fitness):
@@ -53,7 +56,7 @@ class Fitness(base.Fitness):
     """
 
     def __init__(self):
-        self.weights = MAX_FITNESS
+        self.weights = INIT_FITNESS
 
 
 class Individual:
@@ -65,7 +68,8 @@ class Individual:
     _params: List[int]
     fitness: Fitness
 
-    def __init__(self, weights):
+    def __init__(self, weights: List[int]):
+        # copy the weights rather than assigning ref
         self._params = [value for value in weights]
         self.fitness = Fitness()
 
@@ -88,40 +92,46 @@ class Individual:
         return repr(self._params)
 
 
-def ind_2_str(individual: Individual) -> str:
-    return "_".join([str(w) for w in individual])
-
-
 def random_power_of_2(lower: int, upper: int) -> int:
     return 2 ** random.randint(lower, upper)
 
 
-def construct_layers(individual: Individual) -> List[LayerConfig]:
-    """
-    Construct a list of layer configs to pass to the feature extractor
-    :param individual: The individual to construct the configs for
-    :return:
-    """
-    # TODO: Determine kernel size
-    return [LayerConfig(n_out, 2, 1, 0, "gelu") for n_out in individual]
+def random_slug():
+    fake = Faker()
+    return "".join([word.capitalize() for word in fake.words(SLUG_WORDS)])
+
+
+def random_activation():
+    return ActivationFunction(random.randint(1, 3))
+
+
+def random_layer():
+    layer_power = random.randint(LAYER_MIN_POWER, LAYER_MAX_POWER)
+    layer_size = 2 ** layer_power
+
+    kernel_power = random.randint(1, max(1, math.floor(math.log(layer_size * 0.25) / math.log(2))))
+    kernel_size = 2 ** kernel_power
+
+    return LayerConfig(output_channels=layer_size, kernel_size=kernel_size, stride=1, padding=0, activation=random_activation())
 
 
 @lru_cache(maxsize=None)
 def evaluate(individual: Individual) -> Tuple[int]:
     """
     Evaluate a single individual model and return it's mean score after the training time is elapsed.
-    Models are trained and evaluated for a number of timesteps as paramterized in the constants at the
+    Models are trained and evaluated for a number of timestamps as parameterized in the constants at the
     top of the file.
     :param individual: The individual to evaluate.
     :return:
     """
 
-    layers = construct_layers(individual)
-    name = benchmark_name(layers)
+    layers = individual._params
+    name = random_slug()
+    t_start = time()
 
-    print("Evaluating individual: ", individual)
-
-    print(f"{ind_2_str(individual)} now running on cuda")
+    print("Evaluating individual")
+    for layer in layers:
+        print("\t", layer)
 
     checkpoint_path = os.path.join(BASE_CHECKPOINT_PATH, "PPO", ENV_NAME, name)
     os.makedirs(checkpoint_path, exist_ok=True)
@@ -138,7 +148,7 @@ def evaluate(individual: Individual) -> Tuple[int]:
         seed=RNG_SEED,
         wrapper_kwargs=dict(
             noop_max=30,  # max sequential no-ops to take
-            frame_skip=1,  # number of frames to skip before taking a new action
+            frame_skip=4,  # number of frames to skip before taking a new action
             screen_size=84,
             terminal_on_life_loss=True,  #
             clip_reward=True,
@@ -157,23 +167,22 @@ def evaluate(individual: Individual) -> Tuple[int]:
         policy_kwargs=dict(features_extractor_class=VariableBenchmark, features_extractor_kwargs=dict(layers=layers)),
     )
 
-    config_path = f"{checkpoint_path}\\cnn_config"
-    zip_path = f"{checkpoint_path}\\model.zip"
+    config_path = os.path.join(checkpoint_path, "cnn_config")
+    zip_path = os.path.join(checkpoint_path, "model.zip")
 
     # output the model config to a file for easier viewing
     with open(config_path, "w") as file:
         file.write(f"{name}\n")
         file.write(str(model.policy.features_extractor.cnn))
-        print(model.policy.features_extractor.cnn)
 
-    model.learn(TRAIN_STEPS, callback=callback, tb_log_name=name)
+    # model.learn(TRAIN_STEPS, callback=callback, tb_log_name=name)
+    # model.learn(1, callback=callback, tb_log_name=name)
     model.save(zip_path)
 
-    print("Evaluating final model")
-
-    del env  # unallocate old memory first
     env = make_atari_env(ENV_NAME)
     reward_mean, reward_std = evaluate_policy(model, env)
+
+    print(f"Evaluated {name} in {(time() - t_start):.2f}s")
 
     return (reward_mean,)
 
@@ -189,7 +198,7 @@ def mate(a: List[int], b: List[int], probability: float = 0.5) -> Tuple[List[int
     return tools.cxUniform(a.copy(), b.copy(), probability)
 
 
-def mutate(a: List[int], probability: float = 0.5) -> List[int]:
+def mutate(a: List[int], probability: float = 0.5) -> Tuple[List[int]]:
     """
     Mutate an individual, probabilistically changing it's weights to the next or previous power of two.
     :param a: The individual to mutate.
@@ -236,9 +245,8 @@ def main():
 
     toolbox = base.Toolbox()
     # register a new helper function. pass it the min and max power weights every call
-    toolbox.register("layer_output", random_power_of_2, LAYER_MIN_POWER, LAYER_MAX_POWER)
     # this registration is used to create an individual. We generate 3 weights using the layer_output registration above
-    toolbox.register("individual", tools.initCycle, Individual, (toolbox.layer_output,), n=N_CYCLES)
+    toolbox.register("individual", tools.initCycle, Individual, (random_layer,), n=N_CYCLES)
     # register the population function, which we'll use to create a population of individuals
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 

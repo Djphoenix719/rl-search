@@ -3,6 +3,8 @@ from typing import List
 import gym
 from torch import nn
 from dataclasses import dataclass
+
+from benchmarks.activation import ActivationFunction
 from benchmarks.networks.benchmark import Benchmark
 
 
@@ -12,17 +14,10 @@ class LayerConfig:
     kernel_size: int
     stride: int
     padding: int
-    activation: str
+    activation: ActivationFunction
 
-
-def benchmark_name(layers: List[LayerConfig]) -> str:
-    """
-    Construct a deterministic name of the benchmark
-    :param layers:
-    :return:
-    """
-    names = map(lambda layer: f"{layer.output_channels}-{layer.kernel_size}-{layer.stride}-{layer.padding}-{layer.activation}", layers)
-    return "_".join(names)
+    def __hash__(self):
+        return hash(self.output_channels) * hash(self.kernel_size) * hash(self.stride) * hash(self.padding) * hash(self.activation)
 
 
 class VariableBenchmark(Benchmark):
@@ -30,9 +25,6 @@ class VariableBenchmark(Benchmark):
     Variable benchmark, where a set of hyper-parameters can be configured to vary a feature extractor at runtime
     Most of the internals are handled by the package Stable Baselines
     """
-
-    def name(self):
-        return benchmark_name(self.layer_configs)
 
     def __init__(self, observation_space: gym.spaces.Box, layers: [LayerConfig]):
         self.layer_configs: List[LayerConfig] = layers
@@ -44,7 +36,6 @@ class VariableBenchmark(Benchmark):
         # init last_config so we can simplify our for loop to make use of it
         last_config = LayerConfig(self.input_channels, 0, 0, 0, "")
         for config in self.layer_configs:
-
             layers.append(
                 nn.Conv2d(
                     last_config.output_channels,
@@ -54,16 +45,17 @@ class VariableBenchmark(Benchmark):
                     padding=config.padding,
                 )
             )
+            layers.append(config.activation.function())
 
-            activation = config.activation.lower()
-            if activation == "gelu":
-                layers.append(nn.GELU())
-            elif activation == "relu":
-                layers.append(nn.ReLU())
-            elif activation == "celu":
-                layers.append(nn.CELU())
-            else:
-                raise ValueError(f"Layer activation must be one of [GELU, RELU, CELU], but got {activation}.")
+            # activation = config.activation.lower()
+            # if activation == "gelu":
+            #     layers.append(nn.GELU())
+            # elif activation == "relu":
+            #     layers.append(nn.ReLU())
+            # elif activation == "celu":
+            #     layers.append(nn.CELU())
+            # else:
+            #     raise ValueError(f"Layer activation must be one of [GELU, RELU, CELU], but got {activation}.")
 
             last_config = config
 

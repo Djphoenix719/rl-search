@@ -10,14 +10,6 @@ from torch import nn
 
 
 class Benchmark(BaseFeaturesExtractor, ABC):
-    @abstractmethod
-    def name(self):
-        """
-        Name of the benchmark
-        :return:
-        """
-        raise NotImplementedError("Class must implement name property")
-
     @property
     def input_channels(self) -> int:
         """
