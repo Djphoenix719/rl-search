@@ -2,12 +2,14 @@ import random
 from functools import lru_cache
 from time import time
 from typing import Tuple
+from time import sleep
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.env_util import make_atari_env
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.ppo import CnnPolicy
+
 
 from benchmarks.random_util import random_slug
 from benchmarks.individual import Individual
@@ -45,7 +47,7 @@ def evaluate(individual: Individual) -> Tuple[int]:
     env = make_atari_env(
         ENV_NAME,
         n_envs=N_ENVS,
-        seed=RNG_SEED,
+        seed=RANDOM_SEED,
         wrapper_kwargs=dict(
             noop_max=30,  # max sequential no-ops to take
             frame_skip=4,  # number of frames to skip before taking a new action
@@ -62,7 +64,7 @@ def evaluate(individual: Individual) -> Tuple[int]:
         env,
         verbose=VERBOSE,
         batch_size=BATCH_SIZE,
-        seed=RNG_SEED * 7,
+        seed=RANDOM_SEED * 7,
         tensorboard_log=log_path,
         policy_kwargs=dict(features_extractor_class=VariableBenchmark, features_extractor_kwargs=dict(layers=layers)),
     )
@@ -88,5 +90,6 @@ def evaluate(individual: Individual) -> Tuple[int]:
 
 
 @lru_cache(maxsize=None)
-def mock_evaluate(individual: Individual) -> Tuple[int]:
+def mock_evaluate(individual: Individual, wait: float = 0.0) -> Tuple[int]:
+    sleep(wait)
     return (random.randint(-20, 20),)

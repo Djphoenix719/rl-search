@@ -1,15 +1,31 @@
 import random
+from typing import List
 
 from deap import base
 from deap import tools
-from deap import algorithms
+from deap.algorithms import varOr
+from deap.base import Toolbox
 
 from benchmarks.crossover import mutate
 from benchmarks.evaluate import mock_evaluate
 from benchmarks.individual import Individual
+from benchmarks.misc_util import print_banner
 from benchmarks.random_util import random_layer
 
 from benchmarks.settings import *
+
+
+def evaluate_invalid(population: List[Individual], toolbox: Toolbox) -> None:
+    """
+    Evaluates individuals  in place which have an invalid fitness
+    :param population:
+    :param toolbox:
+    :return:
+    """
+    invalid_ind = [ind for ind in population if not ind.fitness.valid]
+    fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
+    for ind, fit in zip(invalid_ind, fitnesses):
+        ind.fitness.values = fit
 
 
 def main():
@@ -17,54 +33,63 @@ def main():
     os.makedirs(BASE_LOG_PATH, exist_ok=True)
 
     # set new seed and record initial rng state for reproducibility
-    random.seed(RNG_SEED)
-    torch.manual_seed(RNG_SEED + 1)
+    random.seed(RANDOM_SEED)
+    torch.manual_seed(TORCH_SEED)
 
     toolbox = base.Toolbox()
-    hof = tools.HallOfFame(maxsize=N_BEST)
-    # register a new helper function. pass it the min and max power weights every call
-    # this registration is used to create an individual. We generate 3 weights using the layer_output registration above
+    hof = tools.HallOfFame(maxsize=N_HOF)
     toolbox.register("individual", tools.initCycle, Individual, (random_layer,), n=N_CYCLES)
-    # register the population function, which we'll use to create a population of individuals
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-
-    # register the selection function the algorithm will use
-    # in our case we use tournament selection, which operates as follows
-    # > Select the best individual among *tournsize* randomly chosen individuals, *k* times.
-    # Note we choose K below with the mu property
-    toolbox.register("select", tools.selTournament, tournsize=3)
-    # the evaluation function will run the model on the gpu in our case
     toolbox.register("evaluate", mock_evaluate)
-    # register our desired mating function, in our case inplace uniform crossover
     toolbox.register("mate", tools.cxUniform, indpb=0.5)
-    # register our desired mutation function, in our case we move a weight up or down a power of two randomly
     toolbox.register("mutate", mutate)
 
     print(f"Running with {torch.cuda.device_count()} GPUs")
 
     population = toolbox.population(POPULATION_SIZE)
 
-    mu = len(population) // 10  # The number of individuals to select for the next generation
-    lambda_ = POPULATION_SIZE - mu  # The number of children to produce at each generation
+    assert N_BEST > 0, "mu (top individuals) must be > 0"
+    assert N_CHILDREN > 0, "lambda (children per generation) must be > 0"
 
-    print("mu", mu)
-    print("lambda_", lambda_)
-
-    print("len(population)", len(population))
-
-    assert mu != 0, "mu is equal to zero"
-    assert lambda_ != 0, "lambda is equal to 0"
-
-    # TODO: Clean up code. Extract settings to separate file.
-    #   Inline genetic algorithm for modifiability
+    # TODO: Clean up code.
     #   Create worker threads to consume a global job queue, once the code is inlined that is easier
 
-    population, logbook = algorithms.eaMuPlusLambda(
-        population, toolbox, mu=mu, lambda_=lambda_, cxpb=0.5, mutpb=0.05, ngen=1, halloffame=hof, verbose=VERBOSE > 0
-    )
+    # Evaluate the individuals with an invalid fitness
+    evaluate_invalid(population, toolbox)
 
+    hof.update(population)
+
+    # Begin the generational process
+    for gen in range(1, N_GEN + 1):
+        print_banner(f"Generation {gen}")
+
+        # Vary the population
+        offspring = varOr(population, toolbox, N_CHILDREN, CROSSOVER_PROB, MUTATION_PROB)
+
+        print(f"Produced {len(offspring)} children")
+
+        # Evaluate the individuals with an invalid fitness
+        evaluate_invalid(offspring, toolbox)
+
+        # Update the hall of fame with the generated individuals
+        hof.update(offspring)
+
+        # Select the next generation population
+        population[:] = tools.selTournament(population + offspring, N_BEST, tournsize=int(len(population + offspring) * 0.2))
+
+        print(f"Population now has {len(population)} individuals")
+
+    # population, logbook = algorithms.eaMuPlusLambda(
+    #     population, toolbox, mu=mu, lambda_=lambda_, cxpb=0.5, mutpb=0.05, ngen=1, halloffame=hof, verbose=VERBOSE > 0
+    # )
+
+    print_banner("Hall of Fame")
+    for ind in hof:
+        print(ind.fitness, ind)
+
+    print_banner("Resulting Population")
     for ind in population:
-        print(ind)
+        print(ind.fitness, ind)
 
 
 if __name__ == "__main__":

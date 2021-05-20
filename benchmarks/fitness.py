@@ -1,6 +1,6 @@
 from deap import base
 
-from benchmarks.settings import INIT_FITNESS
+from benchmarks.settings import *
 
 
 class Fitness(base.Fitness):

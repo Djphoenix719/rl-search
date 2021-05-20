@@ -6,8 +6,10 @@ from faker import Faker
 from benchmarks.math_util import number_to_power
 from benchmarks.activation import ActivationFunction
 from benchmarks.networks import LayerConfig
-from benchmarks.settings import LAYER_MAX_POWER
-from benchmarks.settings import LAYER_MIN_POWER
+
+from benchmarks.settings import *
+
+Faker.seed(RANDOM_SEED)
 
 
 def random_power_of_2(lower: int, upper: int) -> int:
