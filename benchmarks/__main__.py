@@ -9,7 +9,7 @@ from benchmarks.evaluate import mock_evaluate
 from benchmarks.individual import Individual
 from benchmarks.random_util import random_layer
 
-from settings import *
+from benchmarks.settings import *
 
 
 def main():

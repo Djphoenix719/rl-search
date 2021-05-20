@@ -1,4 +1,3 @@
-import os
 import random
 from functools import lru_cache
 from time import time
@@ -14,7 +13,7 @@ from benchmarks.random_util import random_slug
 from benchmarks.individual import Individual
 from benchmarks.networks import VariableBenchmark
 
-from settings import *
+from benchmarks.settings import *
 
 
 @lru_cache(maxsize=None)

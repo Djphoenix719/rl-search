@@ -6,8 +6,8 @@ from benchmarks.activation import ActivationFunction
 from benchmarks.individual import Individual
 from benchmarks.math_util import number_to_power
 from benchmarks.networks import LayerConfig
-from settings import LAYER_MAX_POWER
-from settings import LAYER_MIN_POWER
+from benchmarks.settings import LAYER_MAX_POWER
+from benchmarks.settings import LAYER_MIN_POWER
 
 
 def mutate(individual: Individual, probability: float = 0.5) -> Tuple[Individual]:

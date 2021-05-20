@@ -3,9 +3,9 @@ import torch
 
 RNG_SEED = 42  # Seed for pytorch
 VERBOSE = 2  # 0 no output, 1 info, 2 debug
-ROOT_PATH = "./"  # root save path
-BASE_CHECKPOINT_PATH = os.path.join(ROOT_PATH, "checkpoints")  # path to save checkpoints to
-BASE_LOG_PATH = os.path.join(ROOT_PATH, "logs")  # path to save tensorboard logs to
+ROOT_PATH = "../"  # root save path
+BASE_CHECKPOINT_PATH = os.path.join(ROOT_PATH, "../checkpoints")  # path to save checkpoints to
+BASE_LOG_PATH = os.path.join(ROOT_PATH, "../logs")  # path to save tensorboard logs to
 ENV_NAME = "Pong-v0"  # name of gym environment
 TRAIN_STEPS = 1_000_000  # total training steps to take
 EVAL_STEPS = 10_000  # steps to evaluate a trained model
