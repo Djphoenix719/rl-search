@@ -7,16 +7,16 @@ class ActivationFunction(Enum):
     Enum representing an activation function.
     """
 
-    RELU = 1
-    GELU = 2
-    CELU = 3
+    RELU = 0
+    GELU = 1
+    CELU = 2
 
     def function(self):
-        if self.value == 1:
+        if self.value == 0:
             return nn.ReLU()
-        elif self.value == 2:
+        elif self.value == 1:
             return nn.GELU()
-        elif self.value == 3:
+        elif self.value == 2:
             return nn.CELU()
         else:
             raise ValueError("Invalid activation function type.")
@@ -26,3 +26,12 @@ class ActivationFunction(Enum):
 
     def __repr__(self):
         return repr(self.function())
+
+    def __hash__(self):
+        return hash(self.value)
+
+    def __eq__(self, other):
+        if not (isinstance(other, Enum)):
+            return False
+
+        return self.value == other.value

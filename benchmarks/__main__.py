@@ -1,6 +1,8 @@
 import math
 import os
 import random
+from functools import lru_cache
+from time import time
 
 from typing import Union
 
@@ -8,16 +10,21 @@ from typing import List
 from typing import Tuple
 
 import torch
+from deap import base
 from faker import Faker
 
 from deap import base
 from deap import tools
 from deap import algorithms
+from stable_baselines3 import PPO
+from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.env_util import make_atari_env
+from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.ppo import CnnPolicy
 
 from benchmarks.activation import ActivationFunction
-from benchmarks.evaluate import mock_evaluate
-from benchmarks.individual import Individual
 from benchmarks.networks import LayerConfig
+from benchmarks.networks import VariableBenchmark
 
 RNG_SEED = 42  # Seed for pytorch
 VERBOSE = 2  # 0 no output, 1 info, 2 debug
@@ -42,8 +49,127 @@ N_GEN = 25  # number of generations
 SLUG_WORDS = 8  # number of words in our slugs
 
 
-def random_power(lower: int, upper: int, base: int = 2) -> int:
-    return base ** random.randint(lower, upper)
+class Fitness(base.Fitness):
+    """
+    Represents the fitness of our individual. Mostly this is used as a way of
+    declaring the initial values within the paradigm permitted by the DEAP framework.
+    """
+
+    def __init__(self):
+        self.weights = INIT_FITNESS
+
+
+class Individual:
+    """
+    Represents an individual set of hyper-parameters to be turned into a model.
+    This class mimics a list but is hashable to allow multithreading later.
+    """
+
+    weights: List[LayerConfig]
+    fitness: Fitness
+
+    def __init__(self, weights: List[LayerConfig]):
+        # copy the weights rather than assigning ref
+        self.weights = [value for value in weights]
+        self.fitness = Fitness()
+
+    def __getitem__(self, item):
+        return self.weights[item]
+
+    def __setitem__(self, key, value):
+        self.weights[key] = value
+
+    def __len__(self):
+        return len(self.weights)
+
+    def __hash__(self):
+        return tuple(self.weights).__hash__()
+
+    def __str__(self):
+        return str(self.weights)
+
+    def __repr__(self):
+        return repr(self.weights)
+
+
+@lru_cache(maxsize=None)
+def mock_evaluate(individual: Individual) -> Tuple[int]:
+    return (random.randint(-20, 20),)
+
+
+@lru_cache(maxsize=None)
+def evaluate(individual: Individual) -> Tuple[int]:
+    """
+    Evaluate a single individual model and return it's mean score after the training time is elapsed.
+    Models are trained and evaluated for a number of timestamps as parameterized in the constants at the
+    top of the file.
+    :param individual: The individual to evaluate.
+    :return:
+    """
+
+    t_start = time()
+    layers = individual.weights
+    name = random_slug(SLUG_WORDS)
+
+    print("\nEvaluating individual")
+    for layer in layers:
+        print("\t", layer)
+
+    checkpoint_path = os.path.join(BASE_CHECKPOINT_PATH, "PPO", ENV_NAME, name)
+    os.makedirs(checkpoint_path, exist_ok=True)
+    log_path = os.path.join(BASE_LOG_PATH, "PPO", ENV_NAME, name)
+    os.makedirs(log_path, exist_ok=True)
+
+    # Creates a gym environment for an atari game using the specified seed and number of environments
+    # This is a "vectorized environment", which means Stable Baselines batches the updates into vectors
+    # for improved performance..
+    env = make_atari_env(
+        ENV_NAME,
+        n_envs=N_ENVS,
+        seed=RNG_SEED,
+        wrapper_kwargs=dict(
+            noop_max=30,  # max sequential no-ops to take
+            frame_skip=4,  # number of frames to skip before taking a new action
+            screen_size=84,
+            terminal_on_life_loss=True,
+            clip_reward=True,
+        ),
+    )
+
+    # setup callback to save model at fixed intervals
+    callback = CheckpointCallback(save_freq=CHECKPOINT_FREQ, save_path=checkpoint_path, name_prefix=name)
+    model = PPO(
+        CnnPolicy,
+        env,
+        verbose=VERBOSE,
+        batch_size=BATCH_SIZE,
+        seed=RNG_SEED * 7,
+        tensorboard_log=log_path,
+        policy_kwargs=dict(features_extractor_class=VariableBenchmark, features_extractor_kwargs=dict(layers=layers)),
+    )
+
+    config_path = os.path.join(checkpoint_path, "cnn_config")
+    zip_path = os.path.join(checkpoint_path, "model.zip")
+
+    # output the model config to a file for easier viewing
+    with open(config_path, "w") as file:
+        file.write(f"{name}\n")
+        file.write(str(model.policy.features_extractor.cnn))
+
+    # model.learn(TRAIN_STEPS, callback=callback, tb_log_name=name)
+    # model.learn(1, callback=callback, tb_log_name=name)
+    model.save(zip_path)
+
+    env = make_atari_env(ENV_NAME)
+    reward_mean, reward_std = evaluate_policy(model, env)
+
+    print(f"Evaluated {name} in {(time() - t_start):.2f}s")
+
+    return (reward_mean,)
+
+
+def random_power_of_2(lower: int, upper: int) -> int:
+    return 2 ** random.randint(lower, upper)
 
 
 def random_slug(n_words: int):
@@ -51,7 +177,7 @@ def random_slug(n_words: int):
 
 
 def random_activation():
-    return ActivationFunction(random.randint(1, 3))
+    return ActivationFunction(random.randint(0, len(ActivationFunction) - 1))
 
 
 def number_to_power_of_2(value: Union[int, float]):
@@ -133,13 +259,10 @@ def mutate(individual: Individual, probability: float = 0.5) -> Tuple[Individual
         return 2 ** power
 
     def mutate_activation(value: ActivationFunction) -> ActivationFunction:
-        if value == ActivationFunction.RELU:
-            return random.choice([ActivationFunction.GELU, ActivationFunction.CELU])
-        elif value == ActivationFunction.CELU:
-            return random.choice([ActivationFunction.GELU, ActivationFunction.RELU])
-        elif value == ActivationFunction.GELU:
-            return random.choice([ActivationFunction.CELU, ActivationFunction.RELU])
-        raise ValueError()
+        options = [ActivationFunction(index) for index in range(len(ActivationFunction))]
+        options.remove(value)
+
+        return random.choice(options)
 
     config: LayerConfig
     for (idx, config) in enumerate(individual):
@@ -154,17 +277,12 @@ def main():
     os.makedirs(BASE_CHECKPOINT_PATH, exist_ok=True)
     os.makedirs(BASE_LOG_PATH, exist_ok=True)
 
-    # tensorboard = Popen(f"/home/cuccinela5/anaconda3/envs/thesis1/bin/tensorboard --logdir={BASE_LOG_PATH} --port={TENSORBOARD_PORT}")
-    # open_new_tab(f"http://localhost:{TENSORBOARD_PORT}")
-
     # set new seed and record initial rng state for reproducibility
     random.seed(RNG_SEED)
     torch.manual_seed(RNG_SEED + 1)
-    # torch_state = torch.get_rng_state()
-    # random_state = random.getstate()
-    hof = tools.HallOfFame(maxsize=N_BEST)
 
     toolbox = base.Toolbox()
+    hof = tools.HallOfFame(maxsize=N_BEST)
     # register a new helper function. pass it the min and max power weights every call
     # this registration is used to create an individual. We generate 3 weights using the layer_output registration above
     toolbox.register("individual", tools.initCycle, Individual, (random_layer,), n=N_CYCLES)
@@ -187,31 +305,27 @@ def main():
 
     population = toolbox.population(POPULATION_SIZE)
 
-    done = False
-    generation = 0
-    while not done:
-        mu = len(population) // 10  # The number of individuals to select for the next generation
-        lambda_ = POPULATION_SIZE - mu  # The number of children to produce at each generation
+    mu = len(population) // 10  # The number of individuals to select for the next generation
+    lambda_ = POPULATION_SIZE - mu  # The number of children to produce at each generation
 
-        print("mu", mu)
-        print("lambda_", lambda_)
+    print("mu", mu)
+    print("lambda_", lambda_)
 
-        # We'll use a Mu + Lambda evolutionary algorithm that runs based on the below psuedocode
-        # > evaluate(population)
-        # > for g in range(ngen):
-        # >     offspring = varOr(population, toolbox, lambda_, cxpb, mutpb)
-        # >     evaluate(offspring)
-        # >     population = select(population + offspring, mu)
-        # See: https://deap.readthedocs.io/en/master/api/algo.html#deap.algorithms.eaMuPlusLambda
+    print("len(population)", len(population))
 
-        population, logbook = algorithms.eaMuPlusLambda(
-            population, toolbox, mu=mu, lambda_=lambda_, cxpb=0.5, mutpb=0.05, ngen=N_GEN, halloffame=hof, verbose=VERBOSE > 0
-        )
+    assert mu != 0, "mu is equal to zero"
+    assert lambda_ != 0, "lambda is equal to 0"
 
-        if generation >= N_GEN:
-            done = True
+    # TODO: Clean up code. Extract settings to separate file.
+    #   Inline genetic algorithm for modifiability
+    #   Create worker threads to consume a global job queue, once the code is inlined that is easier
 
-    # tensorboard.kill()
+    population, logbook = algorithms.eaMuPlusLambda(
+        population, toolbox, mu=mu, lambda_=lambda_, cxpb=0.5, mutpb=0.05, ngen=1, halloffame=hof, verbose=VERBOSE > 0
+    )
+
+    for ind in population:
+        print(ind)
 
 
 if __name__ == "__main__":
