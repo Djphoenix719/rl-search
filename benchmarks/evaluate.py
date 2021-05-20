@@ -1,12 +1,19 @@
-from functools import lru_cache
+import math
 from time import time
 from typing import Tuple
 from typing import Union
 
+import gym
 from stable_baselines3 import PPO
+from stable_baselines3.common.callbacks import CallbackList
 from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import EvalCallback
+from stable_baselines3.common.callbacks import StopTrainingOnRewardThreshold
 from stable_baselines3.common.env_util import make_atari_env
+from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
+from stable_baselines3.common.vec_env import SubprocVecEnv
+from stable_baselines3.common.vec_env import VecTransposeImage
 from stable_baselines3.ppo import CnnPolicy
 
 from benchmarks.individual import Individual
@@ -14,7 +21,6 @@ from benchmarks.networks import VariableBenchmark
 from benchmarks.settings import *
 
 
-@lru_cache(maxsize=None)
 def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") -> Tuple[int]:
     """
     Evaluate a single individual model and return it's mean score after the training time is elapsed.
@@ -33,27 +39,34 @@ def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") 
     log_path = os.path.join(BASE_LOG_PATH, "PPO", ENV_NAME, name)
     os.makedirs(log_path, exist_ok=True)
 
+    env_args = dict(
+        noop_max=30,  # max sequential no-ops to take
+        frame_skip=4,  # number of frames to skip before taking a new action
+        screen_size=84,
+        terminal_on_life_loss=True,
+        clip_reward=True,
+    )
+
     # Creates a gym environment for an atari game using the specified seed and number of environments
     # This is a "vectorized environment", which means Stable Baselines batches the updates into vectors
     # for improved performance..
-    env = make_atari_env(
-        ENV_NAME,
-        n_envs=N_ENVS,
-        seed=RANDOM_SEED,
-        wrapper_kwargs=dict(
-            noop_max=30,  # max sequential no-ops to take
-            frame_skip=4,  # number of frames to skip before taking a new action
-            screen_size=84,
-            terminal_on_life_loss=True,
-            clip_reward=True,
-        ),
-    )
+    train_env = make_atari_env(ENV_NAME, n_envs=N_ENVS, seed=RANDOM_SEED, wrapper_kwargs=env_args)
+    eval_env = VecTransposeImage(make_atari_env(ENV_NAME))
 
     # setup callback to save model at fixed intervals
-    callback = CheckpointCallback(save_freq=CHECKPOINT_FREQ, save_path=checkpoint_path, name_prefix=name)
+    save_callback = CheckpointCallback(save_freq=CHECKPOINT_FREQ, save_path=checkpoint_path, name_prefix=name)
+    stop_callback = StopTrainingOnRewardThreshold(reward_threshold=EVAL_THRESHOLD)
+    best_callback = EvalCallback(
+        eval_env,
+        eval_freq=EVAL_FREQ,
+        best_model_save_path=checkpoint_path,
+        callback_on_new_best=stop_callback,
+    )
+    list_callback = CallbackList([save_callback, best_callback])
+
     model = PPO(
         CnnPolicy,
-        env,
+        train_env,
         verbose=VERBOSE,
         batch_size=BATCH_SIZE,
         seed=RANDOM_SEED * 7,
@@ -70,19 +83,19 @@ def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") 
         file.write(f"{name}\n")
         file.write(str(model.policy.features_extractor.cnn))
 
-    # model.learn(TRAIN_STEPS, callback=callback, tb_log_name=name)
-    # model.learn(1, callback=callback, tb_log_name=name)
+    model.learn(TRAIN_STEPS, callback=list_callback, tb_log_name="run")
     model.save(zip_path)
 
-    env = make_atari_env(ENV_NAME)
-    reward_mean, reward_std = evaluate_policy(model, env)
+    time_taken = time() - t_start
 
-    print(f"Evaluated {name} in {(time() - t_start):.2f}s")
+    train_env.reset()
+    reward_mean, reward_std = evaluate_policy(model, make_atari_env(ENV_NAME))
 
-    return (reward_mean,)
+    print(f"Evaluated {name} in {(time_taken):.2f}s")
+
+    return (reward_mean * math.log(time_taken),)
 
 
-@lru_cache(maxsize=None)
 def mock_evaluate(individual: Individual, device: Union[torch.device, str] = "auto") -> Tuple[int]:
 
     return (sum([layer.output_channels for layer in individual]),)

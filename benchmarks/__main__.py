@@ -12,7 +12,7 @@ from deap import tools
 from deap.algorithms import varOr
 
 from benchmarks.crossover import mutate
-from benchmarks.evaluate import mock_evaluate
+from benchmarks.evaluate import evaluate
 from benchmarks.individual import Individual
 from benchmarks.misc_util import print_banner
 from benchmarks.random_util import random_layer
@@ -43,7 +43,7 @@ def evaluate_invalid(
             args=(
                 eval_queue,
                 eval_cache,
-                torch.cuda.device(idx),
+                torch.device(idx),
             ),
         )
         for idx in range(gpu_count)
@@ -71,7 +71,7 @@ def worker(
             float,
         ],
     ],
-    device: torch.cuda.device,
+    device: torch.device,
 ) -> None:
     os.chdir(ROOT_PATH)
     while not eval_queue.empty():
@@ -85,9 +85,9 @@ def worker(
         if encoding in eval_cache:
             continue
 
-        print(f"Evaluating {encoding} on cuda:{device.idx}")
+        print(f"Evaluating {encoding} on {device.type}:{device.index}")
 
-        results = mock_evaluate(ind, device)
+        results = evaluate(ind, device)
         eval_cache[encoding] = results
 
 
@@ -103,7 +103,6 @@ def main():
     hof = tools.HallOfFame(maxsize=N_HOF)
     toolbox.register("individual", tools.initCycle, Individual, (random_layer,), n=N_CYCLES)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-    toolbox.register("evaluate", mock_evaluate)
     toolbox.register("mate", tools.cxUniform, indpb=0.5)
     toolbox.register("mutate", mutate)
 

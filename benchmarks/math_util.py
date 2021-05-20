@@ -9,3 +9,7 @@ def number_to_power(value: Union[int, float], base: Union[int, float] = 2):
     :return:
     """
     return int(math.log(value) / math.log(base))
+
+
+def time_factor(taken: float) -> float:
+    return math.log(60 * 60 * 24) - math.log(taken)
