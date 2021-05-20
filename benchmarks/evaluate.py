@@ -1,4 +1,5 @@
 import math
+import random
 from time import time
 from typing import Tuple
 from typing import Union
@@ -17,6 +18,7 @@ from stable_baselines3.common.vec_env import VecTransposeImage
 from stable_baselines3.ppo import CnnPolicy
 
 from benchmarks.individual import Individual
+from benchmarks.math_util import weighted_time
 from benchmarks.networks import VariableBenchmark
 from benchmarks.settings import *
 
@@ -83,7 +85,7 @@ def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") 
         file.write(f"{name}\n")
         file.write(str(model.policy.features_extractor.cnn))
 
-    model.learn(TRAIN_STEPS, callback=list_callback, tb_log_name="run")
+    # model.learn(TRAIN_STEPS, callback=list_callback, tb_log_name="run")
     model.save(zip_path)
 
     time_taken = time() - t_start
@@ -91,11 +93,29 @@ def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") 
     train_env.reset()
     reward_mean, reward_std = evaluate_policy(model, make_atari_env(ENV_NAME))
 
-    print(f"Evaluated {name} in {(time_taken):.2f}s")
+    reward_mean = abs(MIN_SCORE) + reward_mean
 
-    return (reward_mean * math.log(time_taken),)
+    value = (reward_mean * weighted_time(time_taken),)
+
+    print(f"Evaluated {name} with a score of {value}  in {(time_taken):.2f}s")
+
+    return value
 
 
 def mock_evaluate(individual: Individual, device: Union[torch.device, str] = "auto") -> Tuple[int]:
 
+    name = individual.encode()
+    time_taken = random.random() * 60 * 60 * 6
+
+    # TODO: Finish score weighting by time
+    reward_mean = random.randint(-21, 21)
+    value = (reward_mean * SCORE_WEIGHT + weighted_time(time_taken) * TIME_WEIGHT,)
+
+    print(f"Evaluated {name} {(time_taken):.2f}s -> {reward_mean}, scaled to {value}")
+    print(f"reward_mean {reward_mean}, scaled {reward_mean * SCORE_WEIGHT}")
+    print(f"time_taken {time_taken}, factor {weighted_time(time_taken)}, scaled {weighted_time(time_taken) * TIME_WEIGHT}")
+
     return (sum([layer.output_channels for layer in individual]),)
+
+
+evaluate = mock_evaluate

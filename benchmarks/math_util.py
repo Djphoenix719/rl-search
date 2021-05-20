@@ -1,6 +1,8 @@
 import math
 from typing import Union
 
+from benchmarks.settings import *
+
 
 def number_to_power(value: Union[int, float], base: Union[int, float] = 2):
     """
@@ -11,5 +13,13 @@ def number_to_power(value: Union[int, float], base: Union[int, float] = 2):
     return int(math.log(value) / math.log(base))
 
 
-def time_factor(taken: float) -> float:
-    return math.log(60 * 60 * 24) - math.log(taken)
+def weighted_time(x: float) -> float:
+    """
+    Returns an inverse scaling factor, where more time taken equals a lower factor
+    :param x:
+    :return:
+    """
+    percent = (MAX_TIME - x) / TIME_RANGE
+    log = math.log(percent) if percent != 0 else 0
+    value = log * SCORE_RANGE * TIME_WEIGHT
+    return value
