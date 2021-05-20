@@ -33,7 +33,10 @@ class LayerConfig:
         raise IndexError()
 
     def __hash__(self):
-        return hash(self.output_channels) * hash(self.kernel_size) * hash(self.stride) * hash(self.padding) * hash(self.activation)
+        return hash(tuple([self.output_channels, self.kernel_size, self.stride, self.padding, self.activation]))
+
+    def encode(self):
+        return str(f"{self.output_channels}:{self.kernel_size}:{self.stride}:{self.padding}:{self.activation}")
 
 
 class VariableBenchmark(Benchmark):

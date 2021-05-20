@@ -23,7 +23,7 @@ N_ENVS = 4  # number of parallel environments to evaluate
 DEVICE_TYPE = "cuda" if torch.cuda.is_available() else "cpu"  # run on cpu or cuda
 LAYER_MIN_POWER, LAYER_MAX_POWER = 1, 9  # max size of output dimensions on a layer in power of 2
 N_CYCLES = 3  # number of weights to generate, functionally becomes number of layers in cnn
-POPULATION_SIZE = 50  # before each round, ensure this many individuals exist, less may due to selection
+POPULATION_SIZE = 5000  # before each round, ensure this many individuals exist, less may due to selection
 N_HOF = 5  # keep the global n individuals that are the best from the entire run
 
 

@@ -3,6 +3,7 @@ from functools import lru_cache
 from time import time
 from typing import Tuple
 from time import sleep
+from typing import Union
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
@@ -19,7 +20,7 @@ from benchmarks.settings import *
 
 
 @lru_cache(maxsize=None)
-def evaluate(individual: Individual) -> Tuple[int]:
+def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") -> Tuple[int]:
     """
     Evaluate a single individual model and return it's mean score after the training time is elapsed.
     Models are trained and evaluated for a number of timestamps as parameterized in the constants at the
@@ -66,6 +67,7 @@ def evaluate(individual: Individual) -> Tuple[int]:
         batch_size=BATCH_SIZE,
         seed=RANDOM_SEED * 7,
         tensorboard_log=log_path,
+        device=device,
         policy_kwargs=dict(features_extractor_class=VariableBenchmark, features_extractor_kwargs=dict(layers=layers)),
     )
 
@@ -90,6 +92,5 @@ def evaluate(individual: Individual) -> Tuple[int]:
 
 
 @lru_cache(maxsize=None)
-def mock_evaluate(individual: Individual, wait: float = 0.0) -> Tuple[int]:
-    sleep(wait)
+def mock_evaluate(individual: Individual, device: Union[torch.device, str] = "auto") -> Tuple[int]:
     return (random.randint(-20, 20),)

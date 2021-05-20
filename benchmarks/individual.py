@@ -28,10 +28,13 @@ class Individual:
         return len(self.weights)
 
     def __hash__(self):
-        return tuple(self.weights).__hash__()
+        return hash(tuple(self.weights))
 
     def __str__(self):
         return str(self.weights)
 
     def __repr__(self):
         return repr(self.weights)
+
+    def encode(self):
+        return "/".join([config.encode() for config in self.weights])

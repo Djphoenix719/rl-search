@@ -1,10 +1,16 @@
 import random
+from typing import Dict
 from typing import List
+from typing import Set
+from typing import Tuple
 
+import torch
 from deap import base
 from deap import tools
 from deap.algorithms import varOr
 from deap.base import Toolbox
+
+from multiprocessing import Manager, Queue, Process
 
 from benchmarks.crossover import mutate
 from benchmarks.evaluate import mock_evaluate
@@ -15,17 +21,70 @@ from benchmarks.random_util import random_layer
 from benchmarks.settings import *
 
 
-def evaluate_invalid(population: List[Individual], toolbox: Toolbox) -> None:
-    """
-    Evaluates individuals  in place which have an invalid fitness
-    :param population:
-    :param toolbox:
-    :return:
-    """
+def evaluate_invalid(
+    population: List[Individual],
+    eval_queue: Queue,
+    eval_cache: Dict[
+        str,
+        Tuple[
+            float,
+        ],
+    ],
+) -> None:
+    eval_count = len(eval_cache)
     invalid_ind = [ind for ind in population if not ind.fitness.valid]
-    fitnesses = toolbox.map(toolbox.evaluate, invalid_ind)
-    for ind, fit in zip(invalid_ind, fitnesses):
-        ind.fitness.values = fit
+    [eval_queue.put(ind) for ind in invalid_ind]
+
+    assert len(invalid_ind) == eval_queue.qsize(), "Some individuals were not inserted into the queue"
+
+    gpu_count = torch.cuda.device_count()
+
+    processes = [
+        Process(
+            target=worker,
+            args=(
+                eval_queue,
+                eval_cache,
+                torch.cuda.device(idx),
+            ),
+        )
+        for idx in range(gpu_count)
+    ]
+
+    print(f"Created {len(processes)} processes")
+    assert len(processes) == gpu_count, "Did not create all gpu processes"
+
+    [process.start() for process in processes]
+    [process.join() for process in processes]
+
+    print_banner(f"Done evaluating batch\n{len(eval_cache)} individuals evaluated\n{len(eval_cache) - eval_count} new individual evaluated")
+
+    for ind in invalid_ind:
+        encoding = ind.encode()
+        ind.fitness.values = eval_cache[encoding]
+
+
+def worker(
+    eval_queue: Queue,
+    eval_cache: Dict[
+        str,
+        Tuple[
+            float,
+        ],
+    ],
+    device: torch.cuda.device,
+) -> None:
+    while not eval_queue.empty():
+        ind: Individual = eval_queue.get()
+        encoding = ind.encode()
+
+        if encoding in eval_cache:
+            continue
+
+        print(f"Evaluating {encoding} on cuda:{device.idx}")
+
+        results = mock_evaluate(ind, device)
+        eval_cache[encoding] = results
 
 
 def main():
@@ -51,37 +110,36 @@ def main():
     assert N_BEST > 0, "mu (top individuals) must be > 0"
     assert N_CHILDREN > 0, "lambda (children per generation) must be > 0"
 
-    # TODO: Clean up code.
-    #   Create worker threads to consume a global job queue, once the code is inlined that is easier
-
-    # Evaluate the individuals with an invalid fitness
-    evaluate_invalid(population, toolbox)
-
-    hof.update(population)
-
-    # Begin the generational process
-    for gen in range(1, N_GEN + 1):
-        print_banner(f"Generation {gen}")
-
-        # Vary the population
-        offspring = varOr(population, toolbox, N_CHILDREN, CROSSOVER_PROB, MUTATION_PROB)
-
-        print(f"Produced {len(offspring)} children")
+    with Manager() as manager:
+        eval_cache = manager.dict()
+        eval_queue = manager.Queue()
 
         # Evaluate the individuals with an invalid fitness
-        evaluate_invalid(offspring, toolbox)
+        evaluate_invalid(population, eval_queue, eval_cache)
 
-        # Update the hall of fame with the generated individuals
-        hof.update(offspring)
+        assert eval_queue.qsize() == 0
 
-        # Select the next generation population
-        population[:] = tools.selTournament(population + offspring, N_BEST, tournsize=int(len(population + offspring) * 0.2))
+        hof.update(population)
 
-        print(f"Population now has {len(population)} individuals")
+        # Begin the generational process
+        for gen in range(1, N_GEN + 1):
+            print_banner(f"Generation {gen}")
 
-    # population, logbook = algorithms.eaMuPlusLambda(
-    #     population, toolbox, mu=mu, lambda_=lambda_, cxpb=0.5, mutpb=0.05, ngen=1, halloffame=hof, verbose=VERBOSE > 0
-    # )
+            # Vary the population
+            offspring = varOr(population, toolbox, N_CHILDREN, CROSSOVER_PROB, MUTATION_PROB)
+
+            print(f"Produced {len(offspring)} children")
+
+            # Evaluate the individuals with an invalid fitness
+            evaluate_invalid(offspring, eval_queue, eval_cache)
+
+            # Update the hall of fame with the generated individuals
+            hof.update(offspring)
+
+            # Select the next generation population
+            population[:] = tools.selTournament(population + offspring, N_BEST, tournsize=int(len(population + offspring) * 0.2))
+
+            print(f"Population now has {len(population)} individuals")
 
     print_banner("Hall of Fame")
     for ind in hof:
