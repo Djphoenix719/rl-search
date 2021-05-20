@@ -1,11 +1,10 @@
 import math
 import os
 import random
-import statistics
 
 from functools import lru_cache
+from typing import Union
 
-from deap.base import Fitness
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.env_util import make_atari_env
@@ -23,6 +22,7 @@ from deap import tools
 from deap import algorithms
 
 from benchmarks.activation import ActivationFunction
+from benchmarks.individual import Individual
 from benchmarks.networks import LayerConfig
 from benchmarks.networks import VariableBenchmark
 
@@ -41,7 +41,7 @@ DEVICE_TYPE = "cuda" if torch.cuda.is_available() else "cpu"  # run on cpu or cu
 TENSORBOARD_PORT = 6006  # port tensorboard should run on
 LAYER_MIN_POWER, LAYER_MAX_POWER = 1, 9  # max size of output dimensions on a layer in power of 2
 N_CYCLES = 3  # number of weights to generate, functionally becomes number of layers in cnn
-POPULATION_SIZE = 5  # before each round, ensure this many individuals exist, less may due to selection
+POPULATION_SIZE = 50  # before each round, ensure this many individuals exist, less may due to selection
 N_BEST = 4  # keep the top n individuals from a round
 MAX_FITNESS = (20.0,)  # max fitness a model can achieve, dependent on task
 INIT_FITNESS = (-20.0,)  # initial fitness values
@@ -49,70 +49,40 @@ N_GEN = 25  # number of generations
 SLUG_WORDS = 8  # number of words in our slugs
 
 
-class Fitness(base.Fitness):
-    """
-    Represents the fitness of our individual. Mostly this is used as a way of
-    declaring the initial values within the paradigm permitted by the DEAP framework.
-    """
-
-    def __init__(self):
-        self.weights = INIT_FITNESS
-
-
-class Individual:
-    """
-    Represents an individual set of hyper-parameters to be turned into a model.
-    This class mimics a list but is hashable to allow multithreading later.
-    """
-
-    _params: List[int]
-    fitness: Fitness
-
-    def __init__(self, weights: List[int]):
-        # copy the weights rather than assigning ref
-        self._params = [value for value in weights]
-        self.fitness = Fitness()
-
-    def __getitem__(self, item):
-        return self._params[item]
-
-    def __setitem__(self, key, value):
-        self._params[key] = value
-
-    def __len__(self):
-        return len(self._params)
-
-    def __hash__(self):
-        return tuple(self._params).__hash__()
-
-    def __str__(self):
-        return str(self._params)
-
-    def __repr__(self):
-        return repr(self._params)
-
-
 def random_power_of_2(lower: int, upper: int) -> int:
     return 2 ** random.randint(lower, upper)
 
 
-def random_slug():
-    fake = Faker()
-    return "".join([word.capitalize() for word in fake.words(SLUG_WORDS)])
+def random_slug(n_words: int):
+    return "".join([word.capitalize() for word in Faker().words(n_words)])
 
 
 def random_activation():
     return ActivationFunction(random.randint(1, 3))
 
 
+def number_to_power_of_2(value: Union[int, float]):
+    """
+    Finds the correct power of two, e.g. solves `value = 2^n` for n
+    :param value:
+    :return:
+    """
+    return int(math.log(value) / math.log(2))
+
+
 def random_layer():
     layer_power = random.randint(LAYER_MIN_POWER, LAYER_MAX_POWER)
     layer_size = 2 ** layer_power
 
-    kernel_power = random.randint(1, max(1, math.floor(math.log(layer_size * 0.25) / math.log(2))))
+    kernel_power = random.randint(1, max(1, math.floor(number_to_power_of_2(layer_size * 0.25))))
     kernel_size = 2 ** kernel_power
 
     return LayerConfig(output_channels=layer_size, kernel_size=kernel_size, stride=1, padding=0, activation=random_activation())
+
+
+@lru_cache(maxsize=None)
+def mock_evaluate(individual: Individual) -> Tuple[int]:
+    return (random.randint(-20, 20),)
 
 
 @lru_cache(maxsize=None)
@@ -125,17 +95,16 @@ def evaluate(individual: Individual) -> Tuple[int]:
     :return:
     """
 
-    layers = individual._params
-    name = random_slug()
     t_start = time()
+    layers = individual.weights
+    name = random_slug(SLUG_WORDS)
 
-    print("Evaluating individual")
+    print("\nEvaluating individual")
     for layer in layers:
         print("\t", layer)
 
     checkpoint_path = os.path.join(BASE_CHECKPOINT_PATH, "PPO", ENV_NAME, name)
     os.makedirs(checkpoint_path, exist_ok=True)
-
     log_path = os.path.join(BASE_LOG_PATH, "PPO", ENV_NAME, name)
     os.makedirs(log_path, exist_ok=True)
 
@@ -150,7 +119,7 @@ def evaluate(individual: Individual) -> Tuple[int]:
             noop_max=30,  # max sequential no-ops to take
             frame_skip=4,  # number of frames to skip before taking a new action
             screen_size=84,
-            terminal_on_life_loss=True,  #
+            terminal_on_life_loss=True,
             clip_reward=True,
         ),
     )
@@ -198,20 +167,29 @@ def mate(a: List[int], b: List[int], probability: float = 0.5) -> Tuple[List[int
     return tools.cxUniform(a.copy(), b.copy(), probability)
 
 
-def mutate(a: List[int], probability: float = 0.5) -> Tuple[List[int]]:
+def clamp(value: Union[int, float], min_: Union[int, float], max_: Union[int, float]) -> Union[int, float]:
+    if value >= max_:
+        value = max_
+    if value <= min_:
+        value = min_
+
+    return value
+
+
+def mutate(individual: Individual, probability: float = 0.5) -> Tuple[Individual]:
     """
     Mutate an individual, probabilistically changing it's weights to the next or previous power of two.
-    :param a: The individual to mutate.
+    :param individual: The individual to mutate.
     :param probability: The probability of changing a given weight.
     :return: A new mutated individual.
     """
-    # a = a.copy()
-    for idx in range(len(a)):
+
+    def mutate_power(value: int) -> int:
         if random.random() < probability:
-            continue
+            return value
 
         direction = random.choice([-1, 1])
-        power = int(math.log(a[idx]) / math.log(2)) + direction
+        power = number_to_power_of_2(value) + direction
 
         # flip direction if we're up against the bounds
         if power < LAYER_MIN_POWER:
@@ -219,9 +197,40 @@ def mutate(a: List[int], probability: float = 0.5) -> Tuple[List[int]]:
         if power > LAYER_MAX_POWER:
             power -= 2
 
-        a[idx] = 2 ** power
+        return 2 ** power
 
-    return (a,)
+    def mutate_kernel(kernel_size: int, output_size: int):
+        if random.random() < probability:
+            return kernel_size
+
+        max_power = math.floor(number_to_power_of_2(output_size * 0.25))
+
+        direction = random.choice([-1, 1])
+        power = number_to_power_of_2(kernel_size) + direction
+
+        if power < 1:
+            power = 1
+        if power > max_power:
+            power = max_power - 1
+
+        return 2 ** power
+
+    def mutate_activation(value: ActivationFunction) -> ActivationFunction:
+        if value == ActivationFunction.RELU:
+            return random.choice([ActivationFunction.GELU, ActivationFunction.CELU])
+        elif value == ActivationFunction.CELU:
+            return random.choice([ActivationFunction.GELU, ActivationFunction.RELU])
+        elif value == ActivationFunction.GELU:
+            return random.choice([ActivationFunction.CELU, ActivationFunction.RELU])
+        raise ValueError()
+
+    config: LayerConfig
+    for (idx, config) in enumerate(individual):
+        config.output_channels = mutate_power(config.output_channels)
+        config.kernel_size = mutate_kernel(config.kernel_size, config.output_channels)
+        config.activation = mutate_activation(config.activation)
+
+    return (individual,)
 
 
 def main():
@@ -236,11 +245,6 @@ def main():
     torch.manual_seed(RNG_SEED + 1)
     # torch_state = torch.get_rng_state()
     # random_state = random.getstate()
-
-    sts = tools.Statistics()
-    sts.register("std", statistics.stdev)
-    sts.register("mean", statistics.mean)
-    sts.register("median", statistics.median)
     hof = tools.HallOfFame(maxsize=N_BEST)
 
     toolbox = base.Toolbox()
@@ -256,7 +260,7 @@ def main():
     # Note we choose K below with the mu property
     toolbox.register("select", tools.selTournament, tournsize=3)
     # the evaluation function will run the model on the gpu in our case
-    toolbox.register("evaluate", evaluate)
+    toolbox.register("evaluate", mock_evaluate)
     # register our desired mating function, in our case inplace uniform crossover
     toolbox.register("mate", tools.cxUniform, indpb=0.5)
     # register our desired mutation function, in our case we move a weight up or down a power of two randomly
@@ -267,9 +271,13 @@ def main():
     population = toolbox.population(POPULATION_SIZE)
 
     done = False
+    generation = 0
     while not done:
-        mu = POPULATION_SIZE // 10  # select the top 10% of individuals with tournament selection
-        lambda_ = POPULATION_SIZE - mu  #
+        mu = len(population) // 10  # The number of individuals to select for the next generation
+        lambda_ = POPULATION_SIZE - mu  # The number of children to produce at each generation
+
+        print("mu", mu)
+        print("lambda_", lambda_)
 
         # We'll use a Mu + Lambda evolutionary algorithm that runs based on the below psuedocode
         # > evaluate(population)
@@ -278,15 +286,13 @@ def main():
         # >     evaluate(offspring)
         # >     population = select(population + offspring, mu)
         # See: https://deap.readthedocs.io/en/master/api/algo.html#deap.algorithms.eaMuPlusLambda
-        logbook = algorithms.eaMuPlusLambda(
-            population, toolbox, mu=mu, lambda_=lambda_, cxpb=0.5, mutpb=0.05, ngen=N_GEN, stats=sts, halloffame=hof, verbose=VERBOSE > 0
+
+        population, logbook = algorithms.eaMuPlusLambda(
+            population, toolbox, mu=mu, lambda_=lambda_, cxpb=0.5, mutpb=0.05, ngen=N_GEN, halloffame=hof, verbose=VERBOSE > 0
         )
 
-        print("Best of run")
-        print(hof.items)
-
-        # TODO: Stopping criteria, do we want to continue after N_GENS for any reason?
-        done = True
+        if generation >= N_GEN:
+            done = True
 
     # tensorboard.kill()
 

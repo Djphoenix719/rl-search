@@ -16,6 +16,22 @@ class LayerConfig:
     padding: int
     activation: ActivationFunction
 
+    def __len__(self):
+        return 5
+
+    def __getitem__(self, item: int):
+        if item == 0:
+            return self.output_channels
+        elif item == 1:
+            return self.kernel_size
+        elif item == 2:
+            return self.stride
+        elif item == 3:
+            return self.padding
+        elif item == 4:
+            return self.activation
+        raise IndexError()
+
     def __hash__(self):
         return hash(self.output_channels) * hash(self.kernel_size) * hash(self.stride) * hash(self.padding) * hash(self.activation)
 
