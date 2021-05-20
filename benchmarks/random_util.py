@@ -1,23 +1,15 @@
 import math
 import random
 
-from faker import Faker
-
 from benchmarks.math_util import number_to_power
 from benchmarks.activation import ActivationFunction
 from benchmarks.networks import LayerConfig
 
 from benchmarks.settings import *
 
-Faker.seed(RANDOM_SEED)
-
 
 def random_power_of_2(lower: int, upper: int) -> int:
     return 2 ** random.randint(lower, upper)
-
-
-def random_slug(n_words: int):
-    return "".join([word.capitalize() for word in Faker().words(n_words)])
 
 
 def random_activation():

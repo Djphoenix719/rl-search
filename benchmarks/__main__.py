@@ -1,23 +1,21 @@
+import queue
 import random
+from multiprocessing import Manager
+from multiprocessing import Process
+from multiprocessing import Queue
 from typing import Dict
 from typing import List
-from typing import Set
 from typing import Tuple
 
-import torch
 from deap import base
 from deap import tools
 from deap.algorithms import varOr
-from deap.base import Toolbox
-
-from multiprocessing import Manager, Queue, Process
 
 from benchmarks.crossover import mutate
 from benchmarks.evaluate import mock_evaluate
 from benchmarks.individual import Individual
 from benchmarks.misc_util import print_banner
 from benchmarks.random_util import random_layer
-
 from benchmarks.settings import *
 
 
@@ -53,11 +51,12 @@ def evaluate_invalid(
 
     print(f"Created {len(processes)} processes")
     assert len(processes) == gpu_count, "Did not create all gpu processes"
+    print(f"Queued {eval_queue.qsize()} individuals for evaluation")
 
     [process.start() for process in processes]
     [process.join() for process in processes]
 
-    print_banner(f"Done evaluating batch\n{len(eval_cache)} individuals evaluated\n{len(eval_cache) - eval_count} new individual evaluated")
+    print_banner(f"Done evaluating batch\n{len(eval_cache)} individual(s) evaluated\n{len(eval_cache) - eval_count} new individual(s) evaluated")
 
     for ind in invalid_ind:
         encoding = ind.encode()
@@ -74,8 +73,13 @@ def worker(
     ],
     device: torch.cuda.device,
 ) -> None:
+    os.chdir(ROOT_PATH)
     while not eval_queue.empty():
-        ind: Individual = eval_queue.get()
+        try:
+            ind: Individual = eval_queue.get(timeout=1)
+        except queue.Empty:
+            return
+
         encoding = ind.encode()
 
         if encoding in eval_cache:
@@ -138,8 +142,6 @@ def main():
 
             # Select the next generation population
             population[:] = tools.selTournament(population + offspring, N_BEST, tournsize=int(len(population + offspring) * 0.2))
-
-            print(f"Population now has {len(population)} individuals")
 
     print_banner("Hall of Fame")
     for ind in hof:

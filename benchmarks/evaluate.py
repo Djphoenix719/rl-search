@@ -1,8 +1,6 @@
-import random
 from functools import lru_cache
 from time import time
 from typing import Tuple
-from time import sleep
 from typing import Union
 
 from stable_baselines3 import PPO
@@ -11,11 +9,8 @@ from stable_baselines3.common.env_util import make_atari_env
 from stable_baselines3.common.evaluation import evaluate_policy
 from stable_baselines3.ppo import CnnPolicy
 
-
-from benchmarks.random_util import random_slug
 from benchmarks.individual import Individual
 from benchmarks.networks import VariableBenchmark
-
 from benchmarks.settings import *
 
 
@@ -31,11 +26,7 @@ def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") 
 
     t_start = time()
     layers = individual.weights
-    name = random_slug(SLUG_WORDS)
-
-    print("\nEvaluating individual")
-    for layer in layers:
-        print("\t", layer)
+    name = individual.encode()
 
     checkpoint_path = os.path.join(BASE_CHECKPOINT_PATH, "PPO", ENV_NAME, name)
     os.makedirs(checkpoint_path, exist_ok=True)
@@ -93,4 +84,5 @@ def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") 
 
 @lru_cache(maxsize=None)
 def mock_evaluate(individual: Individual, device: Union[torch.device, str] = "auto") -> Tuple[int]:
-    return (random.randint(-20, 20),)
+
+    return (sum([layer.output_channels for layer in individual]),)
