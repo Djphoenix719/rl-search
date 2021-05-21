@@ -150,6 +150,8 @@ def main():
     for ind in population:
         print(ind.fitness, ind)
 
+    # TODO: Email self when run is complete
+
 
 if __name__ == "__main__":
     main()
