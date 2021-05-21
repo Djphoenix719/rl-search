@@ -116,6 +116,3 @@ def mock_evaluate(individual: Individual, device: Union[torch.device, str] = "au
     print(f"time_taken {time_taken}, factor {weighted_time(time_taken)}, scaled {weighted_time(time_taken) * TIME_WEIGHT}")
 
     return (sum([layer.output_channels for layer in individual]),)
-
-
-evaluate = mock_evaluate
