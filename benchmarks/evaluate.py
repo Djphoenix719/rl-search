@@ -1,19 +1,15 @@
-import math
 import random
 from time import time
 from typing import Tuple
 from typing import Union
 
-import gym
 from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CallbackList
 from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.callbacks import StopTrainingOnRewardThreshold
 from stable_baselines3.common.env_util import make_atari_env
-from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.vec_env import SubprocVecEnv
 from stable_baselines3.common.vec_env import VecTransposeImage
 from stable_baselines3.ppo import CnnPolicy
 

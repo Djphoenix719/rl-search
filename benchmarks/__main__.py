@@ -7,6 +7,7 @@ from typing import Dict
 from typing import List
 from typing import Tuple
 
+import torch
 from deap import base
 from deap import tools
 from deap.algorithms import varOr
@@ -37,26 +38,29 @@ def evaluate_invalid(
 
     gpu_count = torch.cuda.device_count()
 
-    processes = [
-        Process(
-            target=worker,
-            args=(
-                eval_queue,
-                eval_cache,
-                torch.device(idx),
-            ),
-        )
-        for idx in range(gpu_count)
-    ]
+    if gpu_count > 1:
+        processes = [
+            Process(
+                target=worker,
+                args=(
+                    eval_queue,
+                    eval_cache,
+                    torch.device(idx),
+                ),
+            )
+            for idx in range(gpu_count)
+        ]
 
-    print(f"Created {len(processes)} processes")
-    assert len(processes) == gpu_count, "Did not create all gpu processes"
-    print(f"Queued {eval_queue.qsize()} individuals for evaluation")
+        print(f"Created {len(processes)} processes")
+        assert len(processes) == gpu_count, "Did not create all gpu processes"
+        print(f"Queued {eval_queue.qsize()} individuals for evaluation")
 
-    [process.start() for process in processes]
-    [process.join() for process in processes]
+        [process.start() for process in processes]
+        [process.join() for process in processes]
 
-    print_banner(f"Done evaluating batch\n{len(eval_cache)} individual(s) evaluated\n{len(eval_cache) - eval_count} new individual(s) evaluated")
+        print_banner(f"Done evaluating batch\n{len(eval_cache)} individual(s) evaluated\n{len(eval_cache) - eval_count} new individual(s) evaluated")
+    else:
+        worker(eval_queue, eval_cache, device=torch.device(0))
 
     for ind in invalid_ind:
         encoding = ind.encode()
