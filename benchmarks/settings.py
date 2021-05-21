@@ -1,10 +1,11 @@
 import os
 import torch
+import platform
 
 
 # OUTPUT SETTINGS
 VERBOSE = 2  # 0 no output, 1 info, 2 debug
-ROOT_PATH = "/mnt/checkpoints"  # root save path
+ROOT_PATH = "D:/rl-search/" if platform.node() == "DESKTOP-C9EHK4U" else "/mnt/checkpoints"  # root save path
 BASE_CHECKPOINT_PATH = os.path.join(ROOT_PATH, "checkpoints")  # path to save checkpoints to
 BASE_LOG_PATH = os.path.join(ROOT_PATH, "logs")  # path to save tensorboard logs to
 TENSORBOARD_PORT = 6006  # port tensorboard should run on
