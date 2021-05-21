@@ -81,7 +81,7 @@ def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") 
         file.write(f"{name}\n")
         file.write(str(model.policy.features_extractor.cnn))
 
-    # model.learn(TRAIN_STEPS, callback=list_callback, tb_log_name="run")
+    model.learn(TRAIN_STEPS, callback=list_callback, tb_log_name="run")
     model.save(zip_path)
 
     time_taken = time() - t_start
