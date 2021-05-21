@@ -81,6 +81,8 @@ def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") 
         file.write(f"{name}\n")
         file.write(str(model.policy.features_extractor.cnn))
 
+    print("Beginning training...")
+
     model.learn(TRAIN_STEPS, callback=list_callback, tb_log_name="run")
     model.save(zip_path)
 
