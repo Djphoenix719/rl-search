@@ -67,6 +67,9 @@ def evaluate_invalid(
         ind.fitness.values = eval_cache[encoding]
 
 
+total_new = 0
+
+
 def worker(
     eval_queue: Queue,
     eval_cache: Dict[
@@ -77,6 +80,7 @@ def worker(
     ],
     device: torch.device,
 ) -> None:
+    global total_new
     os.chdir(ROOT_PATH)
     while not eval_queue.empty():
         try:
@@ -89,6 +93,8 @@ def worker(
         if encoding in eval_cache:
             continue
 
+        total_new += 1
+
         print(f"Evaluating {encoding} on {device.type}:{device.index}")
 
         results = evaluate(ind, device)
@@ -96,6 +102,7 @@ def worker(
 
 
 def main():
+    global total_new
     os.makedirs(BASE_CHECKPOINT_PATH, exist_ok=True)
     os.makedirs(BASE_LOG_PATH, exist_ok=True)
 
@@ -153,6 +160,8 @@ def main():
     print_banner("Resulting Population")
     for ind in population:
         print(ind.fitness, ind)
+
+    print("Total new", total_new)
 
     # TODO: Email self when run is complete
 
