@@ -78,6 +78,10 @@ def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") 
         train_env = make_env(0, N_ENVS)
         eval_env = make_env(1, 1)
 
+        # required by models in baselines
+        train_env = VecTransposeImage(train_env)
+        eval_env = VecTransposeImage(eval_env)
+
         # setup callback to save model at fixed intervals
         save_callback = CheckpointCallback(save_freq=CHECKPOINT_FREQ, save_path=checkpoint_path, name_prefix=name)
         stop_callback = StopTrainingOnRewardThreshold(reward_threshold=EVAL_THRESHOLD)
@@ -97,6 +101,11 @@ def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") 
             seed=RANDOM_SEED * 7,
             tensorboard_log=log_path,
             learning_rate=LEARNING_RATE,
+            n_steps=UPDATE_STEPS,
+            n_epochs=N_EPOCHS,
+            ent_coef=ENT_COEF,
+            vf_coef=VF_COEF,
+            clip_range=CLIP_RANGE,
             device=device,
             policy_kwargs=dict(features_extractor_class=VariableBenchmark, features_extractor_kwargs=dict(layers=layers)),
         )

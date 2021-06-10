@@ -50,7 +50,7 @@ SCORE_RANGE = MAX_SCORE - MIN_SCORE
 CHECKPOINT_FREQ = 500_000  # interval between checkpoints
 DEVICE_TYPE = "cuda" if torch.cuda.is_available() else "cpu"  # run on cpu or cuda
 EVAL_FREQ = 10_000  # number steps between evaluations
-EVAL_THRESHOLD = MAX_SCORE / 2  # early stopping threshold
+EVAL_THRESHOLD = 0  # early stopping threshold
 
 # n_envs: 8
 N_ENVS = 20  # number of parallel environments to evaluate
