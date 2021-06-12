@@ -50,7 +50,7 @@ SCORE_RANGE = MAX_SCORE - MIN_SCORE
 CHECKPOINT_FREQ = 500_000  # interval between checkpoints
 DEVICE_TYPE = "cuda" if torch.cuda.is_available() else "cpu"  # run on cpu or cuda
 EVAL_FREQ = 10_000  # number steps between evaluations
-EVAL_THRESHOLD = 0  # early stopping threshold
+EVAL_THRESHOLD = -10  # early stopping threshold
 
 # n_envs: 8
 N_ENVS = 20  # number of parallel environments to evaluate
@@ -61,7 +61,7 @@ N_EPOCHS = 4
 # batch_size: 256
 BATCH_SIZE = 256  # size of batch updates
 # n_timesteps: !!float 1e7
-TRAIN_STEPS = 10_000_000  # total training steps to take
+TRAIN_STEPS = 1_000_000  # total training steps to take
 EVAL_STEPS = 10_000  # steps to evaluate a trained model
 # learning_rate: lin_2.5e-4
 LEARNING_RATE = linear_schedule(2.5e-4)
@@ -79,7 +79,7 @@ CROSSOVER_PROB = 0.5  # probability of mating two individuals
 MUTATION_PROB = 0.5  # probability of mutating an individual
 N_BEST = 5  # keep the top n individuals from a round
 N_CHILDREN = 20  # number of children to produce each generation
-LAYER_MIN_POWER, LAYER_MAX_POWER = 1, 9  # max size of output dimensions on a layer in power of 2
+LAYER_MIN_POWER, LAYER_MAX_POWER = 1, 8  # max size of output dimensions on a layer in power of 2
 N_CYCLES = 3  # number of weights to generate, functionally becomes number of layers in cnn
 POPULATION_SIZE = 25  # before each round, ensure this many individuals exist, less may due to selection
 N_HOF = 5  # keep the global n individuals that are the best from the entire run

@@ -14,10 +14,10 @@ from stable_baselines3.common.callbacks import StopTrainingOnRewardThreshold
 from stable_baselines3.common.env_util import make_atari_env
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.torch_layers import NatureCNN
 from stable_baselines3.common.vec_env import VecEnv
 from stable_baselines3.common.vec_env import VecTransposeImage
 from stable_baselines3.ppo import CnnPolicy
+from stable_baselines3.common.vec_env import SubprocVecEnv
 
 from benchmarks.individual import Individual
 from benchmarks.math_util import weighted_time
@@ -70,7 +70,7 @@ def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") 
                 monitor_dir=None,
                 wrapper_class=atari_wrapper,
                 env_kwargs=None,
-                vec_env_cls=None,
+                vec_env_cls=SubprocVecEnv,
                 vec_env_kwargs=None,
                 monitor_kwargs=None,
             )
@@ -101,14 +101,33 @@ def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") 
             seed=RANDOM_SEED * 7,
             tensorboard_log=log_path,
             learning_rate=LEARNING_RATE,
-            n_steps=UPDATE_STEPS,
-            n_epochs=N_EPOCHS,
-            ent_coef=ENT_COEF,
-            vf_coef=VF_COEF,
-            clip_range=CLIP_RANGE,
+            # n_steps=UPDATE_STEPS,
+            # n_epochs=N_EPOCHS,
+            # ent_coef=ENT_COEF,
+            # vf_coef=VF_COEF,
+            # clip_range=CLIP_RANGE,
             device=device,
             policy_kwargs=dict(features_extractor_class=VariableBenchmark, features_extractor_kwargs=dict(layers=layers)),
         )
+        # NatureCNN
+        # [
+        # torch.Size([32, 1, 8, 8]),
+        # torch.Size([32]),
+        # torch.Size([64, 32, 4, 4]),
+        # torch.Size([64]),
+        # torch.Size([64, 64, 3, 3]),
+        # torch.Size([64]),
+        # torch.Size([512, 3136]),
+        # torch.Size([512]),
+        # torch.Size([6, 512]),
+        # torch.Size([6]),
+        # torch.Size([1, 512]),
+        # torch.Size([1])
+        # ]
+        # Custom Environment
+        # [torch.Size([16, 1, 4, 4]), torch.Size([16]), torch.Size([256, 16, 32, 32]), torch.Size([256]), torch.Size([2, 256, 2, 2]), torch.Size([2]),
+        #  torch.Size([512, 4802]), torch.Size([512]), torch.Size([6, 512]), torch.Size([6]), torch.Size([1, 512]), torch.Size([1])]
+        print([param.shape for param in model.policy.parameters()])
 
         config_path = os.path.join(checkpoint_path, "cnn_config")
         zip_path = os.path.join(checkpoint_path, "model.zip")

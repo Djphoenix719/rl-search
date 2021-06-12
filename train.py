@@ -141,6 +141,21 @@ def main():
         clip_range=CLIP_RANGE,
         policy_kwargs=dict(features_extractor_class=NatureCNN),
     )
+    # [
+    # torch.Size([32, 1, 8, 8]),
+    # torch.Size([32]),
+    # torch.Size([64, 32, 4, 4]),
+    # torch.Size([64]),
+    # torch.Size([64, 64, 3, 3]),
+    # torch.Size([64]),
+    # torch.Size([512, 3136]),
+    # torch.Size([512]),
+    # torch.Size([6, 512]),
+    # torch.Size([6]),
+    # torch.Size([1, 512]),
+    # torch.Size([1])
+    # ]
+    print([param.shape for param in model.policy.parameters()])
 
     config_path = os.path.join(checkpoint_path, "cnn_config")
     zip_path = os.path.join(checkpoint_path, "model.zip")
