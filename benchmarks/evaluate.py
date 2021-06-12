@@ -48,7 +48,8 @@ def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") 
 
     if not os.path.exists(results_path):
         env_args = dict(
-            frame_skip=1,
+            noop_max=30,  # max sequential no-ops to take
+            frame_skip=4,  # number of frames to skip before taking a new action
             screen_size=84,
             terminal_on_life_loss=True,
             clip_reward=True,
@@ -57,30 +58,25 @@ def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") 
         # Creates a gym environment for an atari game using the specified seed and number of environments
         # This is a "vectorized environment", which means Stable Baselines batches the updates into vectors
         # for improved performance..
-        def atari_wrapper(env: gym.Env) -> gym.Env:
-            env = AtariWrapper(env, **env_args)
-            return env
-
-        def make_env(rank: int, count: int) -> VecEnv:
-            return make_vec_env(
-                ENV_NAME,
-                n_envs=count,
-                seed=RANDOM_SEED + rank,
-                start_index=0,
-                monitor_dir=None,
-                wrapper_class=atari_wrapper,
-                env_kwargs=None,
-                vec_env_cls=SubprocVecEnv,
-                vec_env_kwargs=None,
-                monitor_kwargs=None,
-            )
-
-        train_env = make_env(0, N_ENVS)
-        eval_env = make_env(1, 1)
-
-        # required by models in baselines
-        train_env = VecTransposeImage(train_env)
-        eval_env = VecTransposeImage(eval_env)
+        # def atari_wrapper(env: gym.Env) -> gym.Env:
+        #     env = AtariWrapper(env, **env_args)
+        #     return env
+        #
+        # def make_env(rank: int, count: int) -> VecEnv:
+        #     return make_vec_env(
+        #         ENV_NAME,
+        #         n_envs=count,
+        #         seed=RANDOM_SEED + rank,
+        #         start_index=0,
+        #         monitor_dir=None,
+        #         wrapper_class=atari_wrapper,
+        #         env_kwargs=None,
+        #         vec_env_cls=SubprocVecEnv,
+        #         vec_env_kwargs=None,
+        #         monitor_kwargs=None,
+        #     )
+        train_env = make_atari_env(ENV_NAME, n_envs=N_ENVS, seed=RANDOM_SEED, wrapper_kwargs=env_args)
+        eval_env = VecTransposeImage(make_atari_env(ENV_NAME))
 
         # setup callback to save model at fixed intervals
         save_callback = CheckpointCallback(save_freq=CHECKPOINT_FREQ, save_path=checkpoint_path, name_prefix=name)
@@ -100,12 +96,6 @@ def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") 
             batch_size=BATCH_SIZE,
             seed=RANDOM_SEED * 7,
             tensorboard_log=log_path,
-            learning_rate=LEARNING_RATE,
-            # n_steps=UPDATE_STEPS,
-            # n_epochs=N_EPOCHS,
-            # ent_coef=ENT_COEF,
-            # vf_coef=VF_COEF,
-            # clip_range=CLIP_RANGE,
             device=device,
             policy_kwargs=dict(features_extractor_class=VariableBenchmark, features_extractor_kwargs=dict(layers=layers)),
         )
@@ -150,7 +140,7 @@ def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") 
         print("Beginning evaluation...")
 
         # score of the game, standard deviation of multiple runs
-        reward_mean, reward_std = evaluate_policy(model, make_env(2, 1))
+        reward_mean, reward_std = evaluate_policy(model, make_atari_env(ENV_NAME))
 
         with open(results_path, "w") as handle:
             handle.write(json.dumps((reward_mean, reward_std, time_taken)))
