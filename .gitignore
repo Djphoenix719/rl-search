@@ -8,6 +8,7 @@ benchmarks/checkpoints/**/*
 benchmarks/logs/**/*
 checkpoints/**/*
 logs/**/*
+tests/**/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
