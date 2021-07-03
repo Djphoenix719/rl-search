@@ -40,13 +40,13 @@ def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") 
     layers = individual.weights
     name = individual.encode()
 
-    checkpoint_path = os.path.join(BASE_CHECKPOINT_PATH, "A2C", ENV_NAME, name)
+    checkpoint_path = os.path.join(BASE_CHECKPOINT_PATH, "PPO", ENV_NAME, name)
 
     if os.path.exists(checkpoint_path):
         return (random.randint(MIN_SCORE, MAX_SCORE),)
 
     os.makedirs(checkpoint_path, exist_ok=True)
-    log_path = os.path.join(BASE_LOG_PATH, "A2C", ENV_NAME, name)
+    log_path = os.path.join(BASE_LOG_PATH, "PPO", ENV_NAME, name)
     os.makedirs(log_path, exist_ok=True)
 
     results_path = os.path.join(checkpoint_path, "results.json")
