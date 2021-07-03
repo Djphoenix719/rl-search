@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Callable
 
 from benchmarks.fitness import Fitness
 from benchmarks.networks import LayerConfig
@@ -10,13 +10,15 @@ class Individual:
     This class mimics a list but is hashable to allow multithreading later.
     """
 
+    output_size: int
     weights: List[LayerConfig]
     fitness: Fitness
 
-    def __init__(self, weights: List[LayerConfig]):
+    def __init__(self, output_size: Callable[[], int], weights: Callable[[], List[LayerConfig]]):
         # copy the weights rather than assigning ref
-        self.weights = [value for value in weights]
+        self.weights = [value for value in weights()]
         self.fitness = Fitness()
+        self.output_size = output_size()
 
     def __getitem__(self, item):
         return self.weights[item]

@@ -1,5 +1,4 @@
 import queue
-import random
 from multiprocessing import Manager
 from multiprocessing import Process
 from multiprocessing import Queue
@@ -7,7 +6,6 @@ from typing import Dict
 from typing import List
 from typing import Tuple
 
-import torch
 from deap import base
 from deap import tools
 from deap.algorithms import varOr
@@ -18,6 +16,7 @@ from benchmarks.evaluate import evaluate
 from benchmarks.individual import Individual
 from benchmarks.misc_util import print_banner
 from benchmarks.random_util import random_layer
+from benchmarks.random_util import random_power_of_2
 from benchmarks.settings import *
 
 
@@ -104,8 +103,10 @@ def main():
     set_random_seed(RANDOM_SEED)
 
     toolbox = base.Toolbox()
-    hof = tools.HallOfFame(maxsize=N_HOF)
-    toolbox.register("individual", tools.initCycle, Individual, (random_layer,), n=N_CYCLES)
+    hof = tools.HallOfFame(maxsize=N_BEST)
+    toolbox.register("output", random_power_of_2, OUTPUT_MIN_POWER, OUTPUT_MAX_POWER)
+    toolbox.register("layers", tools.initCycle, container=list, seq_func=(random_layer,), n=N_LAYERS)
+    toolbox.register("individual", Individual, toolbox.output, toolbox.layers)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
     toolbox.register("mate", tools.cxUniform, indpb=0.5)
     toolbox.register("mutate", mutate)

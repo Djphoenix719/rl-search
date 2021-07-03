@@ -2,66 +2,54 @@ import json
 from time import time
 
 import gym
+import torch as th
+from stable_baselines3.common.callbacks import CallbackList
+from stable_baselines3.common.callbacks import CheckpointCallback
+from stable_baselines3.common.callbacks import EvalCallback
+from stable_baselines3.common.callbacks import StopTrainingOnRewardThreshold
+from torch import nn
 from stable_baselines3 import PPO
 from stable_baselines3.common.atari_wrappers import ClipRewardEnv
 from stable_baselines3.common.atari_wrappers import EpisodicLifeEnv
 from stable_baselines3.common.atari_wrappers import FireResetEnv
 from stable_baselines3.common.atari_wrappers import MaxAndSkipEnv
 from stable_baselines3.common.atari_wrappers import WarpFrame
-from stable_baselines3.common.callbacks import CallbackList
-from stable_baselines3.common.callbacks import CheckpointCallback
-from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.evaluation import evaluate_policy
-from stable_baselines3.common.torch_layers import NatureCNN
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 from stable_baselines3.common.utils import set_random_seed
 from stable_baselines3.common.vec_env import VecEnv
 from stable_baselines3.common.vec_env import VecTransposeImage
 from stable_baselines3.ppo import CnnPolicy
 
 from benchmarks.settings import *
+from benchmarks.callbacks import TimeLimitCallback
+from benchmarks.wrapper import AtariWrapper
 
 
-class AtariWrapper(gym.Wrapper):
-    """
-    Atari 2600 preprocessings
+class FeatureExtractor(BaseFeaturesExtractor):
+    def __init__(self, observation_space: gym.spaces.Box, features_dim: int = 512):
+        super(FeatureExtractor, self).__init__(observation_space, features_dim)
 
-    Specifically:
+        n_input_channels = observation_space.shape[0]
+        self.cnn = nn.Sequential(
+            nn.Conv2d(n_input_channels, 16, kernel_size=4, stride=1, padding=0),
+            nn.ReLU(),
+            nn.Conv2d(16, 256, kernel_size=32, stride=1, padding=0),
+            nn.GELU(),
+            nn.Conv2d(256, 2, kernel_size=2, stride=1, padding=0),
+            nn.CELU(),
+            nn.Flatten(),
+        )
 
-    * NoopReset: obtain initial state by taking random number of no-ops on reset.
-    * Frame skipping: 4 by default
-    * Max-pooling: most recent two observations
-    * Termination signal when a life is lost.
-    * Resize to a square image: 84x84 by default
-    * Grayscale observation
-    * Clip reward to {-1, 0, 1}
+        # Compute shape by doing one forward pass
+        with th.no_grad():
+            n_flatten = self.cnn(th.as_tensor(observation_space.sample()[None]).float()).shape[1]
 
-    :param env: gym environment
-    :param noop_max: max number of no-ops
-    :param frame_skip: the frequency at which the agent experiences the game.
-    :param screen_size: resize Atari frame
-    :param terminal_on_life_loss: if True, then step() returns done=True whenever a life is lost.
-    :param clip_reward: If True (default), the reward is clip to {-1, 0, 1} depending on its sign.
-    """
+        self.linear = nn.Sequential(nn.Linear(n_flatten, features_dim), nn.ReLU())
 
-    def __init__(
-        self,
-        env: gym.Env,
-        frame_skip: int = 4,
-        screen_size: int = 84,
-        terminal_on_life_loss: bool = True,
-        clip_reward: bool = True,
-    ):
-        env = MaxAndSkipEnv(env, skip=frame_skip)
-        if terminal_on_life_loss:
-            env = EpisodicLifeEnv(env)
-        if "FIRE" in env.unwrapped.get_action_meanings():
-            env = FireResetEnv(env)
-        env = WarpFrame(env, width=screen_size, height=screen_size)
-        if clip_reward:
-            env = ClipRewardEnv(env)
-
-        super(AtariWrapper, self).__init__(env)
+    def forward(self, observations: th.Tensor) -> th.Tensor:
+        return self.linear(self.cnn(observations))
 
 
 def main():
@@ -69,17 +57,18 @@ def main():
     set_random_seed(RANDOM_SEED)
 
     t_start = time()
-    name = "ParamTest"
+    name = "LargeFinalLayer"
 
     checkpoint_path = os.path.join(BASE_CHECKPOINT_PATH, "PPO", ENV_NAME, name)
     os.makedirs(checkpoint_path, exist_ok=True)
+
     log_path = os.path.join(BASE_LOG_PATH, "PPO", ENV_NAME, name)
     os.makedirs(log_path, exist_ok=True)
+
     results_path = os.path.join(checkpoint_path, "results.json")
 
     env_args = dict(
-        # noop_max=1,  # max sequential no-ops to take
-        frame_skip=1,  # number of frames to skip before taking a new action
+        frame_skip=4,
         screen_size=84,
         terminal_on_life_loss=True,
         clip_reward=True,
@@ -117,14 +106,15 @@ def main():
 
     # setup callback to save model at fixed intervals
     save_callback = CheckpointCallback(save_freq=CHECKPOINT_FREQ, save_path=checkpoint_path, name_prefix=name)
-    # stop_callback = StopTrainingOnRewardThreshold(reward_threshold=EVAL_THRESHOLD)
+    stop_callback = StopTrainingOnRewardThreshold(reward_threshold=EVAL_THRESHOLD)
+    time_callback = TimeLimitCallback(max_time=TIME_LIMIT)
     best_callback = EvalCallback(
         eval_env,
         eval_freq=EVAL_FREQ,
         best_model_save_path=checkpoint_path,
-        # callback_on_new_best=stop_callback,
+        callback_on_new_best=stop_callback,
     )
-    list_callback = CallbackList([save_callback, best_callback])
+    list_callback = CallbackList([save_callback, best_callback, time_callback])
 
     model = PPO(
         CnnPolicy,
@@ -139,23 +129,9 @@ def main():
         ent_coef=ENT_COEF,
         vf_coef=VF_COEF,
         clip_range=CLIP_RANGE,
-        policy_kwargs=dict(features_extractor_class=NatureCNN),
+        device=DEVICE_TYPE,
+        policy_kwargs=dict(features_extractor_class=FeatureExtractor),
     )
-    # [
-    # torch.Size([32, 1, 8, 8]),
-    # torch.Size([32]),
-    # torch.Size([64, 32, 4, 4]),
-    # torch.Size([64]),
-    # torch.Size([64, 64, 3, 3]),
-    # torch.Size([64]),
-    # torch.Size([512, 3136]),
-    # torch.Size([512]),
-    # torch.Size([6, 512]),
-    # torch.Size([6]),
-    # torch.Size([1, 512]),
-    # torch.Size([1])
-    # ]
-    print([param.shape for param in model.policy.parameters()])
 
     config_path = os.path.join(checkpoint_path, "cnn_config")
     zip_path = os.path.join(checkpoint_path, "model.zip")
@@ -168,10 +144,11 @@ def main():
     print("Beginning training...")
 
     model.learn(TRAIN_STEPS, callback=list_callback, tb_log_name="run")
+    # model.learn(TRAIN_STEPS, tb_log_name="run")
     model.save(zip_path)
 
     del train_env
-    del eval_env
+    # del eval_env
 
     time_taken = time() - t_start
 
@@ -185,4 +162,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import cProfile
+
+    cProfile.run("main()")

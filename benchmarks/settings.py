@@ -6,8 +6,10 @@ import platform
 
 
 # OUTPUT SETTINGS
+from benchmarks.schedule import linear_schedule
+
 VERBOSE = 2  # 0 no output, 1 info, 2 debug
-ROOT_PATH = "D:/rl-search/" if platform.node() == "DESKTOP-C9EHK4U" else "/mnt/checkpoints"  # root save path
+ROOT_PATH = "D:/rl-search" if platform.node() == "DESKTOP-C9EHK4U" else "/mnt/checkpoints"  # root save path
 BASE_CHECKPOINT_PATH = os.path.join(ROOT_PATH, "checkpoints")  # path to save checkpoints to
 BASE_LOG_PATH = os.path.join(ROOT_PATH, "logs")  # path to save tensorboard logs to
 TENSORBOARD_PORT = 6006  # port tensorboard should run on
@@ -15,28 +17,6 @@ TENSORBOARD_PORT = 6006  # port tensorboard should run on
 
 # RNG SEEDS
 RANDOM_SEED = 42  # seed for random.seed
-# TORCH_SEED = RANDOM_SEED + 1  # seed for pytorch
-
-
-def linear_schedule(initial_value: float) -> Callable[[float], float]:
-    """
-    Linear learning rate schedule.
-
-    :param initial_value: Initial learning rate.
-    :return: schedule that computes
-      current learning rate depending on remaining progress
-    """
-
-    def func(progress_remaining: float) -> float:
-        """
-        Progress will decrease from 1 (beginning) to 0.
-
-        :param progress_remaining:
-        :return: current learning rate
-        """
-        return progress_remaining * initial_value
-
-    return func
 
 
 # GYM & BASELINES SETTINGS
@@ -49,6 +29,7 @@ TIME_RANGE = MAX_TIME - MIN_TIME
 SCORE_RANGE = MAX_SCORE - MIN_SCORE
 CHECKPOINT_FREQ = 500_000  # interval between checkpoints
 DEVICE_TYPE = "cuda" if torch.cuda.is_available() else "cpu"  # run on cpu or cuda
+# DEVICE_TYPE = "cpu"  # run on cpu or cuda
 EVAL_FREQ = 10_000  # number steps between evaluations
 EVAL_THRESHOLD = -10  # early stopping threshold
 
@@ -61,8 +42,9 @@ N_EPOCHS = 4
 # batch_size: 256
 BATCH_SIZE = 256  # size of batch updates
 # n_timesteps: !!float 1e7
-TRAIN_STEPS = 1_000_000  # total training steps to take
+TRAIN_STEPS = 1  # total training steps to take
 EVAL_STEPS = 10_000  # steps to evaluate a trained model
+TIME_LIMIT = 60 * 60 * 3  # time limit in seconds of a single model
 # learning_rate: lin_2.5e-4
 LEARNING_RATE = linear_schedule(2.5e-4)
 # clip_range: lin_0.1
@@ -79,8 +61,9 @@ CROSSOVER_PROB = 0.5  # probability of mating two individuals
 MUTATION_PROB = 0.5  # probability of mutating an individual
 N_BEST = 5  # keep the top n individuals from a round
 N_CHILDREN = 20  # number of children to produce each generation
-LAYER_MIN_POWER, LAYER_MAX_POWER = 1, 8  # max size of output dimensions on a layer in power of 2
-N_CYCLES = 3  # number of weights to generate, functionally becomes number of layers in cnn
+LAYER_MIN_POWER, LAYER_MAX_POWER = 1, 7  # max size of output dimensions on a layer in power of 2
+OUTPUT_MIN_POWER, OUTPUT_MAX_POWER = 1, 9  # output size min and maximum power
+N_LAYERS = 3  # number of weights to generate, functionally becomes number of layers in cnn
 POPULATION_SIZE = 25  # before each round, ensure this many individuals exist, less may due to selection
 N_HOF = 5  # keep the global n individuals that are the best from the entire run
 SCORE_WEIGHT = 0.7  # percentage of fitness that should be score
