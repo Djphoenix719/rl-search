@@ -90,7 +90,7 @@ def evaluate(individual: Individual, device: Union[torch.device, str] = "auto") 
         # setup callback to save model at fixed intervals
         save_callback = CheckpointCallback(save_freq=CHECKPOINT_FREQ, save_path=checkpoint_path, name_prefix=name)
         stop_callback = StopTrainingOnRewardThreshold(reward_threshold=EVAL_THRESHOLD)
-        time_callback = TimeLimitCallback(max_time=60 * 5)
+        time_callback = TimeLimitCallback(max_time=TIME_LIMIT)
         best_callback = EvalCallback(
             eval_env,
             eval_freq=EVAL_FREQ,
