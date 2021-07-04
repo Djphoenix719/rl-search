@@ -42,7 +42,7 @@ N_EPOCHS = 4
 # batch_size: 256
 BATCH_SIZE = 256  # size of batch updates
 # n_timesteps: !!float 1e7
-TRAIN_STEPS = 1  # total training steps to take
+TRAIN_STEPS = 5_000_000  # total training steps to take
 EVAL_STEPS = 10_000  # steps to evaluate a trained model
 TIME_LIMIT = 60 * 60 * 3  # time limit in seconds of a single model
 # learning_rate: lin_2.5e-4
