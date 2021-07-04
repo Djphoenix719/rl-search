@@ -34,7 +34,7 @@ EVAL_FREQ = 10_000  # number steps between evaluations
 EVAL_THRESHOLD = -10  # early stopping threshold
 
 # n_envs: 8
-N_ENVS = 20  # number of parallel environments to evaluate
+N_ENVS = os.cpu_count() * 2  # number of parallel environments to evaluate
 # n_steps: 128
 UPDATE_STEPS = 128
 # n_epochs: 4
