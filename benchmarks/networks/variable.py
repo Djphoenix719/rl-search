@@ -36,7 +36,7 @@ class LayerConfig:
         return hash(tuple([self.output_channels, self.kernel_size, self.stride, self.padding, self.activation]))
 
     def encode(self):
-        return str(f"{self.output_channels}+{self.kernel_size}+{self.stride}+{self.padding}+{self.activation}")
+        return "_".join(map(str, [self.output_channels, self.kernel_size, self.stride, self.padding, str(self.activation)[:4]]))
 
 
 class VariableBenchmark(Benchmark):

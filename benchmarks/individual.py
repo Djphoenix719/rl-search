@@ -39,4 +39,4 @@ class Individual:
         return repr(self.weights)
 
     def encode(self):
-        return "&".join([config.encode() for config in self.weights])
+        return "&".join([config.encode() for config in self.weights]) + f"-{self.output_size}"
