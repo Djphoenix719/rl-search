@@ -165,15 +165,21 @@ def mock_evaluate(individual: Individual, device: Union[torch.device, str] = "au
     results_path = os.path.join(checkpoint_path, "results.json")
 
     if os.path.exists(results_path):
-        reward_mean, reward_std = json.load(open(results_path, "r"))
+        reward_mean, reward_std, time_taken = json.load(open(results_path, "r"))
     else:
         reward_mean = random.randint(-21, 21)
         reward_std = random.randint(-21, 21) / 20
+        time_taken = random.randint(60 * 5, 60 * 60 * 3)
 
         with open(results_path, "w") as handle:
-            handle.write(json.dumps((reward_mean, reward_std)))
+            handle.write(json.dumps((reward_mean, reward_std, time_taken)))
 
-    return (reward_mean,)
+    reward_mean = abs(MIN_SCORE) + reward_mean
+    value = (reward_mean * weighted_time(time_taken),)
+
+    print(f"Evaluated {name} with a score of {value}  in {(time_taken):.2f}s")
+
+    return value
 
 
 # evaluate = mock_evaluate
