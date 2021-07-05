@@ -8,6 +8,8 @@ from benchmarks.math_util import number_to_power
 from benchmarks.networks import LayerConfig
 from benchmarks.settings import LAYER_MAX_POWER
 from benchmarks.settings import LAYER_MIN_POWER
+from benchmarks.settings import OUTPUT_MIN_POWER
+from benchmarks.settings import OUTPUT_MAX_POWER
 
 
 def mutate(individual: Individual, probability: float = 0.5) -> Tuple[Individual]:
@@ -18,7 +20,7 @@ def mutate(individual: Individual, probability: float = 0.5) -> Tuple[Individual
     :return: A new mutated individual.
     """
 
-    def mutate_power(value: int) -> int:
+    def mutate_power(value: int, min_power: int, max_power: int) -> int:
         if random.random() < probability:
             return value
 
@@ -26,9 +28,9 @@ def mutate(individual: Individual, probability: float = 0.5) -> Tuple[Individual
         power = number_to_power(value) + direction
 
         # flip direction if we're up against the bounds
-        if power < LAYER_MIN_POWER:
+        if power < min_power:
             power += 2
-        if power > LAYER_MAX_POWER:
+        if power > max_power:
             power -= 2
 
         return 2 ** power
@@ -57,8 +59,10 @@ def mutate(individual: Individual, probability: float = 0.5) -> Tuple[Individual
 
     config: LayerConfig
     for (idx, config) in enumerate(individual):
-        config.output_channels = mutate_power(config.output_channels)
+        config.output_channels = mutate_power(config.output_channels, LAYER_MIN_POWER, LAYER_MAX_POWER)
         config.kernel_size = mutate_kernel(config.kernel_size, config.output_channels)
         config.activation = mutate_activation(config.activation)
+
+    individual.output_size = mutate_power(individual.output_size, OUTPUT_MIN_POWER, OUTPUT_MAX_POWER)
 
     return (individual,)
