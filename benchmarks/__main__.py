@@ -11,6 +11,7 @@ from deap import tools
 from deap.algorithms import varOr
 from stable_baselines3.common.utils import set_random_seed
 
+from benchmarks.crossover import mate
 from benchmarks.crossover import mutate
 from benchmarks.evaluate import evaluate
 from benchmarks.individual import Individual
@@ -108,7 +109,7 @@ def main():
     toolbox.register("layers", tools.initCycle, container=list, seq_func=(random_layer,), n=N_LAYERS)
     toolbox.register("individual", Individual, toolbox.output, toolbox.layers)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
-    toolbox.register("mate", tools.cxUniform, indpb=0.5)
+    toolbox.register("mate", mate, probability=CROSSOVER_PROB)
     toolbox.register("mutate", mutate)
 
     print(f"Running with {torch.cuda.device_count()} GPUs")
@@ -154,8 +155,6 @@ def main():
     print_banner("Resulting Population")
     for ind in population:
         print(ind.fitness, ind)
-
-    # TODO: Email self when run is complete
 
 
 if __name__ == "__main__":

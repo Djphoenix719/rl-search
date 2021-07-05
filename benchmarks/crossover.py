@@ -12,6 +12,24 @@ from benchmarks.settings import OUTPUT_MIN_POWER
 from benchmarks.settings import OUTPUT_MAX_POWER
 
 
+def mate(a: Individual, b: Individual, probability: float):
+
+    for idx in range(len(a)):
+        layer_a = a[idx]
+        layer_b = b[idx]
+
+        if random.random() < probability:
+            layer_a.output_channels, layer_b.output_channels = layer_b.output_channels, layer_a.output_channels
+            layer_a.kernel_size, layer_b.kernel_size = layer_b.kernel_size, layer_a.kernel_size
+        if random.random() < probability:
+            layer_a.activation, layer_b.activation = layer_b.activation, layer_a.activation
+
+    if random.random() < probability:
+        a.output_size, b.output_size = b.output_size, a.output_size
+
+    return a, b
+
+
 def mutate(individual: Individual, probability: float = 0.5) -> Tuple[Individual]:
     """
     Mutate an individual, probabilistically changing it's weights to the next or previous power of two.
@@ -40,6 +58,9 @@ def mutate(individual: Individual, probability: float = 0.5) -> Tuple[Individual
             return kernel_size
 
         max_power = math.floor(number_to_power(output_size * 0.25))
+
+        if max_power <= 0:
+            max_power = 1
 
         direction = random.choice([-1, 1])
         power = number_to_power(kernel_size) + direction

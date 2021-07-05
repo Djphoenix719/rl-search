@@ -30,10 +30,10 @@ class Individual:
         return len(self.weights)
 
     def __hash__(self):
-        return hash(tuple(self.weights))
+        return hash(tuple([self.output_size, *self.weights]))
 
     def __str__(self):
-        return str(self.weights)
+        return f"{self.output_size}, {self.weights}"
 
     def __repr__(self):
         return repr(self.weights)
